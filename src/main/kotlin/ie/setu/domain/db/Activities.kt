@@ -1,0 +1,21 @@
+package ie.setu.domain.db
+
+import org.jetbrains.exposed.sql.ReferenceOption
+import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.jodatime.datetime
+
+/**
+ * Exposed table definition for the `activities` table, storing
+ * individual journeys and their step counts.
+ */
+object Activities : Table("activities") {
+    val id = integer("id").autoIncrement()
+    val description = varchar("description", 100)
+    val duration = double("duration")
+    val calories = integer("calories")
+    val steps = integer("steps").default(0)
+    val started = datetime("started")
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+
+    override val primaryKey = PrimaryKey(Activities.id, name = "PK_Activities_ID")
+}
