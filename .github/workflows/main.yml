@@ -3,56 +3,54 @@ name: Build and Deploy to OpenShift
 on:
   push:
     branches:
-      - master  
+      - main
 
 jobs:
-
   build:
     name: Build
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin' 
-        java-version: '17'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
 
-    - name: Setup Maven
-      uses: stCarolas/setup-maven@v5
-      with:
-        maven-version: 3.8.2
-        
-    - name: Build the application with Maven
-      run: mvn clean package -DskipTests
+      - name: Setup Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.8.2
 
-    - name: Upload target directory
-      uses: actions/upload-artifact@v4
-      with:
-        name: target-artifact
-        path: target/
+      - name: Build the application with Maven
+        run: mvn clean package -DskipTests
 
-  documentation: 
+      - name: Upload target directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: target-artifact
+          path: target/
+
+  documentation:
     runs-on: ubuntu-latest
     needs: build
     steps:
-
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it 
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
       # Runs the Maven dokka task
       - name: Dokka with Maven
         run: mvn -B dokka:dokka
 
-      # Builds a zip file with the KDoc generated website in it 
+      # Builds a zip file with the KDoc generated website in it
       - name: Archive KDoc Documentation
         uses: actions/upload-artifact@v4.4.2
         with:
           name: KDoc Documentation Site
-          path: target/dokka  
+          path: target/dokka
   test:
     name: Automated Testing
     needs: build
@@ -63,43 +61,42 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'maven'
+          distribution: "temurin"
+          java-version: "17"
+          cache: "maven"
 
       - name: Run Tests
         run: mvn test
-      
+
   deploy:
     name: Deploy to OpenShift
     needs: test
     runs-on: ubuntu-latest
 
     steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: target-artifact
+          path: target/
 
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: target-artifact
-        path: target/
+      - name: OpenShift Client Installer
+        uses: redhat-actions/oc-installer@v1.2
 
-    - name: OpenShift Client Installer
-      uses: redhat-actions/oc-installer@v1.2
-          
-    - name: Log in to OpenShift
-      env:
-        OPENSHIFT_API_URL: ${{ secrets.OPENSHIFT_API_URL }}
-        OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
-      run: |
-        oc login $OPENSHIFT_API_URL --token=$OPENSHIFT_TOKEN --insecure-skip-tls-verify=true
-    - name: Set project to agile-2025-labs
-      run: |
-        oc project agile-2025-labs
-    - name: Build and deploy the app to OpenShift
-      run: |
-        # OpenShift setup uses Source-to-Image (S2I) 
-        oc start-build health-tracker-rest --from-dir=target/ --follow
-    
-    - name: Check deployment status
-      run: |
-        oc rollout status deployment/health-tracker-rest
+      - name: Log in to OpenShift
+        env:
+          OPENSHIFT_API_URL: ${{ secrets.OPENSHIFT_API_URL }}
+          OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+        run: |
+          oc login $OPENSHIFT_API_URL --token=$OPENSHIFT_TOKEN --insecure-skip-tls-verify=true
+      - name: Set project to agile-2025-labs
+        run: |
+          oc project agile-2025-labs
+      - name: Build and deploy the app to OpenShift
+        run: |
+          # OpenShift setup uses Source-to-Image (S2I) 
+          oc start-build health-tracker-rest --from-dir=target/ --follow
+
+      - name: Check deployment status
+        run: |
+          oc rollout status deployment/health-tracker-rest
