@@ -89,9 +89,9 @@ jobs:
           OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
         run: |
           oc login --token=$OPENSHIFT_TOKEN --server=$OPENSHIFT_API_URL --insecure-skip-tls-verify=true
-      - name: Set project to agile-2025-labs
+      - name: Set project to msc-agile-sem1-25-cmcdonaghrollo
         run: |
-          oc project agile-2025-labs
+          oc project msc-agile-sem1-25-cmcdonaghrollo
       - name: Build and deploy the app to OpenShift
         run: |
           # OpenShift setup uses Source-to-Image (S2I) 
