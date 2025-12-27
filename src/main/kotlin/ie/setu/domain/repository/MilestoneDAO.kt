@@ -51,7 +51,7 @@ class MilestoneDAO {
      * Adds a [milestone] to the Milestones table.
      * @return the id of the milestone following the add.
      */
-    fun save(milestone: Milestone) : Int?{
+    fun save(milestone: Milestone) : Int{
         return transaction {
             Milestones.insert {
                 it[name] = milestone.name

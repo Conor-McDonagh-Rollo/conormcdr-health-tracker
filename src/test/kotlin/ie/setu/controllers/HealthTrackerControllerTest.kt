@@ -105,6 +105,12 @@ class HealthTrackerTest {
         }
 
         @Test
+        fun `adding a user without admin role returns 403 response`() {
+            val addResponse = addUser(validName, validEmail, role = "user")
+            assertEquals(403, addResponse.status)
+        }
+
+        @Test
         fun `multiple users added to table can be retrieved successfully`() {
             transaction {
                 val userDAO = populateUserTable()
@@ -121,15 +127,19 @@ class HealthTrackerTest {
     inner class ReadUsers {
 
         @Test
-        fun `get all users from the database returns 200 or 404 response`() {
+        fun `get all users returns 404 when none exist`() {
             val response = Unirest.get(origin + "/api/users/").asString()
-            if (response.status == 200) {
-                val retrievedUsers: ArrayList<User> = jsonToObject(response.body.toString())
-                assertNotEquals(0, retrievedUsers.size)
-            }
-            else {
-                assertEquals(404, response.status)
-            }
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get all users returns 200 when users exist`() {
+            addUser(validName, validEmail)
+
+            val response = Unirest.get(origin + "/api/users/").asString()
+            assertEquals(200, response.status)
+            val retrievedUsers: ArrayList<User> = jsonToObject(response.body.toString())
+            assertNotEquals(0, retrievedUsers.size)
         }
 
 
@@ -320,21 +330,48 @@ class HealthTrackerTest {
 
             assertEquals(404, addActivityResponse.status)
         }
+
+        @Test
+        fun `map activity uses fallback names when reverse geocode fails`() {
+            val addedUser: User = jsonToObject(addUser(validName, validEmail).body.toString())
+
+            val response = addMapActivity(
+                userId = addedUser.id,
+                startLat = 0.0,
+                startLng = 0.0,
+                endLat = 0.0,
+                endLng = 0.1
+            )
+
+            assertEquals(201, response.status)
+            val activity = jsonNodeToObject<Activity>(response)
+            assertEquals(true, activity.description.contains("Start (0.0, 0.0)"))
+            assertEquals(true, activity.description.contains("End (0.0, 0.1)"))
+
+            deleteUser(addedUser.id)
+        }
     }
 
     @Nested
     inner class ReadActivities {
 
         @Test
-        fun `get all activities from the database returns 200 or 404 response`() {
+        fun `get all activities returns 404 when none exist`() {
             val response = retrieveAllActivities()
-            if (response.status == 200){
-                val retrievedActivities = jsonNodeToObject<Array<Activity>>(response)
-                assertNotEquals(0, retrievedActivities.size)
-            }
-            else{
-                assertEquals(404, response.status)
-            }
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get all activities returns 200 when data exists`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            addActivity(
+                activities[0].description, activities[0].duration,
+                activities[0].calories, activities[0].started, addedUser.id)
+
+            val response = retrieveAllActivities()
+            assertEquals(200, response.status)
+            val retrievedActivities = jsonNodeToObject<Array<Activity>>(response)
+            assertNotEquals(0, retrievedActivities.size)
         }
 
         @Test
@@ -481,6 +518,29 @@ class HealthTrackerTest {
         }
 
         @Test
+        fun `deleting an activity without admin role returns 403 response`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            val addActivityResponse = addActivity(
+                activities[0].description, activities[0].duration,
+                activities[0].calories, activities[0].started, addedUser.id)
+            val addedActivity = jsonNodeToObject<Activity>(addActivityResponse)
+
+            assertEquals(403, deleteActivityByActivityId(addedActivity.id, role = "user").status)
+            deleteUser(addedUser.id)
+        }
+
+        @Test
+        fun `deleting activities by user id without admin role returns 403 response`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            addActivity(
+                activities[0].description, activities[0].duration,
+                activities[0].calories, activities[0].started, addedUser.id)
+
+            assertEquals(403, deleteActivitiesByUserId(addedUser.id, role = "user").status)
+            deleteUser(addedUser.id)
+        }
+
+        @Test
         fun `deleting an activity by id when it exists, returns a 204 response`() {
 
             //Arrange - add a user and an associated activity that we plan to do a delete on
@@ -574,6 +634,21 @@ class HealthTrackerTest {
             assertEquals(403, updateResponse.status)
             assertEquals(204, deleteMilestone(addedMilestone.id, role = "admin").status)
         }
+
+        @Test
+        fun `deleting a milestone without admin role returns 403 response`() {
+            val createResponse = addMilestone(
+                name = "Bree",
+                description = "Safe stop",
+                targetSteps = 150000,
+                role = "admin"
+            )
+            val addedMilestone = jsonNodeToObject<Milestone>(createResponse)
+
+            val deleteResponse = deleteMilestone(addedMilestone.id)
+            assertEquals(403, deleteResponse.status)
+            assertEquals(204, deleteMilestone(addedMilestone.id, role = "admin").status)
+        }
     }
 
     @Nested
@@ -621,6 +696,28 @@ class HealthTrackerTest {
         }
 
         @Test
+        fun `updating an achievement without admin role returns 403 response`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val updateResponse = updateAchievement(
+                id = created.id,
+                name = "Updated",
+                description = "Updated description",
+                targetDistanceKm = 1.5,
+                badgeFile = null,
+                role = "user"
+            )
+            assertEquals(403, updateResponse.status)
+        }
+
+        @Test
         fun `earned achievements returned when distance meets target`() {
             val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
             addActivity(
@@ -654,6 +751,449 @@ class HealthTrackerTest {
             val achievements = jsonNodeToObject<Array<Achievement>>(response)
             assertEquals(1, achievements.size)
             assertEquals("First Kilometer", achievements[0].name)
+        }
+    }
+
+    @Nested
+    inner class AdminRestrictionResponses {
+
+        @Test
+        fun `updating a user without admin role returns 403 response`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            val response = updateUser(addedUser.id, "Updated Name", "updated@test.com", role = "user")
+            assertEquals(403, response.status)
+        }
+
+        @Test
+        fun `deleting a user without admin role returns 403 response`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            val response = deleteUser(addedUser.id, role = "user")
+            assertEquals(403, response.status)
+        }
+
+        @Test
+        fun `updating an activity without admin role returns 403 response`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            val addActivityResponse = addActivity(
+                activities[0].description,
+                activities[0].duration,
+                activities[0].calories,
+                activities[0].started,
+                addedUser.id
+            )
+            val addedActivity = jsonNodeToObject<Activity>(addActivityResponse)
+
+            val response = updateActivity(
+                addedActivity.id,
+                "Updated Description",
+                20.0,
+                200,
+                DateTime.now(),
+                addedUser.id,
+                role = "user"
+            )
+            assertEquals(403, response.status)
+        }
+
+        @Test
+        fun `deleting activities by user id returns 204 when admin`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            addActivity(
+                activities[0].description,
+                activities[0].duration,
+                activities[0].calories,
+                activities[0].started,
+                addedUser.id
+            )
+
+            val response = deleteActivitiesByUserId(addedUser.id, role = "admin")
+            assertEquals(204, response.status)
+        }
+    }
+
+    @Nested
+    inner class MilestoneControllerResponses {
+
+        @Test
+        fun `get all milestones returns 404 when none exist`() {
+            val response = retrieveAllMilestones()
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get all milestones returns 200 when data exists`() {
+            addMilestone(
+                name = "Rivendell",
+                description = "Elven refuge",
+                targetSteps = 300000,
+                role = "admin"
+            )
+
+            val response = retrieveAllMilestones()
+            assertEquals(200, response.status)
+        }
+
+        @Test
+        fun `get milestone by id returns 404 when missing`() {
+            val response = retrieveMilestoneById(999)
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get milestone by id returns 200 when it exists`() {
+            val createResponse = addMilestone(
+                name = "Moria",
+                description = "Dark halls",
+                targetSteps = 700000,
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Milestone>(createResponse)
+
+            val response = retrieveMilestoneById(created.id)
+            assertEquals(200, response.status)
+        }
+
+        @Test
+        fun `update milestone returns 404 when missing`() {
+            val updateResponse = updateMilestone(
+                id = 999,
+                name = "Missing",
+                description = "Missing",
+                targetSteps = 123,
+                role = "admin"
+            )
+            assertEquals(404, updateResponse.status)
+        }
+
+        @Test
+        fun `update milestone returns 204 when admin`() {
+            val createResponse = addMilestone(
+                name = "Lothlorien",
+                description = "Golden wood",
+                targetSteps = 500000,
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Milestone>(createResponse)
+
+            val updateResponse = updateMilestone(
+                id = created.id,
+                name = "Lothlorien",
+                description = "Golden wood updated",
+                targetSteps = 510000,
+                role = "admin"
+            )
+            assertEquals(204, updateResponse.status)
+        }
+
+        @Test
+        fun `delete milestone returns 404 when missing`() {
+            val deleteResponse = deleteMilestone(999, role = "admin")
+            assertEquals(404, deleteResponse.status)
+        }
+
+        @Test
+        fun `delete milestone returns 204 when admin`() {
+            val createResponse = addMilestone(
+                name = "Bree",
+                description = "Safe stop",
+                targetSteps = 150000,
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Milestone>(createResponse)
+
+            val deleteResponse = deleteMilestone(created.id, role = "admin")
+            assertEquals(204, deleteResponse.status)
+        }
+    }
+
+    @Nested
+    inner class AchievementControllerResponses {
+
+        @Test
+        fun `get all achievements returns 404 when none exist`() {
+            val response = retrieveAllAchievements()
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get all achievements returns 200 when data exists`() {
+            addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+
+            val response = retrieveAllAchievements()
+            assertEquals(200, response.status)
+        }
+
+        @Test
+        fun `get achievement by id returns 200 when it exists`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val response = retrieveAchievementById(created.id)
+            assertEquals(200, response.status)
+        }
+
+        @Test
+        fun `get achievement by id returns 404 when missing`() {
+            val response = retrieveAchievementById(999)
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get achievements by user id returns 404 when user missing`() {
+            val response = retrieveAchievementsByUserId(999)
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `get achievements by user id returns 404 when none earned`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+
+            val response = retrieveAchievementsByUserId(addedUser.id)
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `adding achievement with missing fields returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("name", "Missing Badge")
+                .field("description", "No badge uploaded")
+                .field("targetDistanceKm", "1.0")
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `adding achievement with blank name returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("name", "")
+                .field("description", "Blank name")
+                .field("targetDistanceKm", "1.0")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `adding achievement with missing name returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("description", "Missing name")
+                .field("targetDistanceKm", "1.0")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `adding achievement with blank description returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("name", "Blank description")
+                .field("description", "")
+                .field("targetDistanceKm", "1.0")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `adding achievement with missing description returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("name", "Missing description")
+                .field("targetDistanceKm", "1.0")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `adding achievement with missing target distance returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("name", "Missing target")
+                .field("description", "Missing target distance")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `adding achievement with invalid target distance returns 400 response`() {
+            val request = Unirest.post(origin + "/api/achievements")
+                .field("name", "Invalid target")
+                .field("description", "Bad target distance")
+                .field("targetDistanceKm", "bad")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(400, response.status)
+        }
+
+        @Test
+        fun `updating missing achievement returns 404 response`() {
+            val response = updateAchievement(
+                id = 999,
+                name = "Missing",
+                description = "Missing",
+                targetDistanceKm = 1.0,
+                badgeFile = null,
+                role = "admin"
+            )
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `updating achievement without badge keeps existing badge`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val updateResponse = updateAchievement(
+                id = created.id,
+                name = "First Kilometer",
+                description = "Updated description",
+                targetDistanceKm = 1.2,
+                badgeFile = null,
+                role = "admin"
+            )
+            assertEquals(204, updateResponse.status)
+
+            val retrieved = jsonNodeToObject<Achievement>(retrieveAchievementById(created.id))
+            assertEquals(created.badgePath, retrieved.badgePath)
+        }
+
+        @Test
+        fun `updating achievement with new badge replaces badge path`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val updateResponse = updateAchievement(
+                id = created.id,
+                name = "First Kilometer",
+                description = "Updated again",
+                targetDistanceKm = 1.5,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            assertEquals(204, updateResponse.status)
+
+            val retrieved = jsonNodeToObject<Achievement>(retrieveAchievementById(created.id))
+            assertNotEquals(created.badgePath, retrieved.badgePath)
+        }
+
+        @Test
+        fun `updating achievement with missing fields keeps existing values`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val request = Unirest.patch(origin + "/api/achievements/${created.id}")
+                .field("badge", createTempBadge())
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(204, response.status)
+
+            val retrieved = jsonNodeToObject<Achievement>(retrieveAchievementById(created.id))
+            assertEquals(created.name, retrieved.name)
+            assertEquals(created.description, retrieved.description)
+            assertEquals(created.targetDistanceKm, retrieved.targetDistanceKm, 0.01)
+        }
+
+        @Test
+        fun `updating achievement with invalid target distance keeps existing value`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val request = Unirest.patch(origin + "/api/achievements/${created.id}")
+                .field("name", created.name)
+                .field("description", created.description)
+                .field("targetDistanceKm", "bad")
+                .header("X-User-Role", "admin")
+            val response = request.asJson()
+            assertEquals(204, response.status)
+
+            val retrieved = jsonNodeToObject<Achievement>(retrieveAchievementById(created.id))
+            assertEquals(created.targetDistanceKm, retrieved.targetDistanceKm, 0.01)
+        }
+
+        @Test
+        fun `deleting achievement returns 204 when admin`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val response = deleteAchievement(created.id, role = "admin")
+            assertEquals(204, response.status)
+        }
+
+        @Test
+        fun `deleting missing achievement returns 404 when admin`() {
+            val response = deleteAchievement(999, role = "admin")
+            assertEquals(404, response.status)
+        }
+
+        @Test
+        fun `deleting achievement without admin returns 403 response`() {
+            val createResponse = addAchievement(
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
+                badgeFile = createTempBadge(),
+                role = "admin"
+            )
+            val created = jsonNodeToObject<Achievement>(createResponse)
+
+            val response = deleteAchievement(created.id, role = "user")
+            assertEquals(403, response.status)
         }
     }
 
@@ -858,6 +1398,51 @@ class HealthTrackerTest {
 
     private fun deleteMilestone(id: Int, role: String? = null): HttpResponse<String> {
         val request = Unirest.delete(origin + "/api/milestones/$id")
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asString()
+    }
+
+    private fun retrieveAllMilestones(): HttpResponse<JsonNode> {
+        return Unirest.get(origin + "/api/milestones").asJson()
+    }
+
+    private fun retrieveMilestoneById(id: Int): HttpResponse<JsonNode> {
+        return Unirest.get(origin + "/api/milestones/$id").asJson()
+    }
+
+    private fun retrieveAllAchievements(): HttpResponse<JsonNode> {
+        return Unirest.get(origin + "/api/achievements").asJson()
+    }
+
+    private fun retrieveAchievementById(id: Int): HttpResponse<JsonNode> {
+        return Unirest.get(origin + "/api/achievements/$id").asJson()
+    }
+
+    private fun updateAchievement(
+        id: Int,
+        name: String,
+        description: String,
+        targetDistanceKm: Double,
+        badgeFile: File?,
+        role: String? = null
+    ): HttpResponse<JsonNode> {
+        val request = Unirest.patch(origin + "/api/achievements/$id")
+            .field("name", name)
+            .field("description", description)
+            .field("targetDistanceKm", targetDistanceKm.toString())
+        if (badgeFile != null) {
+            request.field("badge", badgeFile)
+        }
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
+    }
+
+    private fun deleteAchievement(id: Int, role: String? = null): HttpResponse<String> {
+        val request = Unirest.delete(origin + "/api/achievements/$id")
         if (role != null) {
             request.header("X-User-Role", role)
         }

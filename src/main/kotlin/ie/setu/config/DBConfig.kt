@@ -8,7 +8,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.postgresql.util.PSQLException
 
 /**
  * Database configuration and bootstrap.
@@ -19,9 +18,13 @@ import org.postgresql.util.PSQLException
  * In production it connects to a PostgreSQL instance using
  * standard `POSTGRESQL_*` environment variables.
  */
-class DbConfig {
+class DbConfig(
+    private val connector: (String, String, String, String) -> Database = { url, driver, user, password ->
+        Database.connect(url, driver, user, password)
+    }
+) {
 
-    private val logger = KotlinLogging.logger {}
+    private val logger = KotlinLogging.logger("DbConfig")
     private lateinit var dbConfig: Database
 
     /**
@@ -32,12 +35,12 @@ class DbConfig {
      */
     fun getDbConnection(): Database {
 
-        val rawHost = System.getenv("POSTGRESQL_HOST") ?: "localhost"
+        val rawHost = envOrProperty("POSTGRESQL_HOST") ?: "localhost"
         val PGHOST = rawHost.substringAfterLast("://")
-        val PGPORT = System.getenv("POSTGRESQL_SERVICE_PORT") ?: "5432"
-        val PGDATABASE = System.getenv("POSTGRESQL_DATABASE") ?: ""
-        val PGUSER = System.getenv("POSTGRESQL_USER") ?: "sa"
-        val PGPASSWORD = System.getenv("POSTGRESQL_PASSWORD") ?: ""
+        val PGPORT = envOrProperty("POSTGRESQL_SERVICE_PORT") ?: "5432"
+        val PGDATABASE = envOrProperty("POSTGRESQL_DATABASE") ?: ""
+        val PGUSER = envOrProperty("POSTGRESQL_USER") ?: "sa"
+        val PGPASSWORD = envOrProperty("POSTGRESQL_PASSWORD") ?: ""
 
 
         try {
@@ -45,11 +48,11 @@ class DbConfig {
 
             if (PGHOST == "localhost"){
                 logger.info { "Using local in-memory H2 instance for development (data cleared on shutdown)." }
-                dbConfig = Database.connect(
-                    url = "jdbc:h2:mem:mordor-db;DB_CLOSE_DELAY=-1",
-                    driver = "org.h2.Driver",
-                    user = PGUSER,
-                    password = PGPASSWORD
+                dbConfig = connector(
+                    "jdbc:h2:mem:mordor-db;DB_CLOSE_DELAY=-1",
+                    "org.h2.Driver",
+                    PGUSER,
+                    PGPASSWORD
                 )
                 transaction {
                     SchemaUtils.createMissingTablesAndColumns(Users, Activities, Milestones, Achievements)
@@ -59,11 +62,11 @@ class DbConfig {
                 // JDBC connection string format
                 val dbUrl = "jdbc:postgresql://$rawHost:$PGPORT/$PGDATABASE"
 
-                dbConfig = Database.connect(
-                    url = dbUrl,
-                    driver = "org.postgresql.Driver",
-                    user = PGUSER,
-                    password = PGPASSWORD
+                dbConfig = connector(
+                    dbUrl,
+                    "org.postgresql.Driver",
+                    PGUSER,
+                    PGPASSWORD
                 )
             }
 
@@ -72,11 +75,15 @@ class DbConfig {
             }
             logger.info { "DB Connected Successfully to $PGDATABASE at $rawHost:$PGPORT" }
 
-        } catch (e: PSQLException) {
+        } catch (e: Exception) {
             logger.error(e) { "Error in DB Connection: ${e.message}" }
             logger.info { "Env vars used: host=$PGHOST, port=$PGPORT, user=$PGUSER, db=$PGDATABASE" }
         }
 
         return dbConfig
+    }
+
+    private fun envOrProperty(name: String): String? {
+        return System.getProperty(name) ?: System.getenv(name)
     }
 }

@@ -81,6 +81,30 @@ class ActivityDAOTest {
                 assertEquals(12.34, retrieved?.distanceKm ?: 0.0, 0.01)
             }
         }
+
+        @Test
+        fun `long activity descriptions are truncated before save`() {
+            transaction {
+                populateUserTable()
+                SchemaUtils.create(Activities)
+                val activityDAO = ActivityDAO()
+
+                val longDescription = "A".repeat(Activities.DESCRIPTION_MAX_LENGTH + 10)
+                val longActivity = Activity(
+                    id = 0,
+                    description = longDescription,
+                    duration = 10.0,
+                    calories = 50,
+                    started = DateTime.now(),
+                    userId = 1
+                )
+
+                val id = activityDAO.save(longActivity)
+                val retrieved = activityDAO.findByActivityId(id)
+
+                assertEquals(Activities.DESCRIPTION_MAX_LENGTH, retrieved?.description?.length)
+            }
+        }
     }
 
     @Nested
@@ -159,6 +183,50 @@ class ActivityDAOTest {
     }
 
     @Nested
+    inner class DistanceTotals {
+
+        @Test
+        fun `total distance sums all journeys for a user`() {
+            transaction {
+                populateUserTable()
+                SchemaUtils.create(Activities)
+                val activityDAO = ActivityDAO()
+
+                activityDAO.save(Activity(
+                    id = 0,
+                    description = "Short walk",
+                    duration = 10.0,
+                    calories = 30,
+                    started = DateTime.now(),
+                    userId = 1,
+                    distanceKm = 1.5
+                ))
+                activityDAO.save(Activity(
+                    id = 0,
+                    description = "Evening stroll",
+                    duration = 20.0,
+                    calories = 60,
+                    started = DateTime.now(),
+                    userId = 1,
+                    distanceKm = 2.0
+                ))
+                activityDAO.save(Activity(
+                    id = 0,
+                    description = "Other user",
+                    duration = 15.0,
+                    calories = 45,
+                    started = DateTime.now(),
+                    userId = 2,
+                    distanceKm = 5.0
+                ))
+
+                val total = activityDAO.totalDistanceKmByUserId(1)
+                assertEquals(3.5, total, 0.01)
+            }
+        }
+    }
+
+    @Nested
     inner class UpdateActivities {
 
         @Test
@@ -174,6 +242,27 @@ class ActivityDAOTest {
                     calories = 220, started = DateTime.now(), userId = 2)
                 activityDAO.updateByActivityId(activity3updated.id, activity3updated)
                 assertEquals(activity3updated, activityDAO.findByActivityId(3))
+            }
+        }
+
+        @Test
+        fun `updating activity truncates long description`() {
+            transaction {
+                populateUserTable()
+                val activityDAO = populateActivityTable()
+
+                val longDescription = "B".repeat(Activities.DESCRIPTION_MAX_LENGTH + 5)
+                val updated = Activity(
+                    id = 1,
+                    description = longDescription,
+                    duration = 30.0,
+                    calories = 200,
+                    started = DateTime.now(),
+                    userId = 1
+                )
+                activityDAO.updateByActivityId(1, updated)
+                val retrieved = activityDAO.findByActivityId(1)
+                assertEquals(Activities.DESCRIPTION_MAX_LENGTH, retrieved?.description?.length)
             }
         }
 

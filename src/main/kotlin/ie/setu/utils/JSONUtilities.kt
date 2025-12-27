@@ -6,7 +6,6 @@ import com.fasterxml.jackson.datatype.joda.JodaModule
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import kong.unirest.core.HttpResponse
 import kong.unirest.core.JsonNode
 
@@ -25,15 +24,20 @@ fun jsonObjectMapper(): ObjectMapper =
  * Convenience function for converting a JSON string to a Kotlin
  * object of type [T]. Used in tests and controllers.
  */
-inline fun <reified T : Any> jsonToObject(json: String): T =
+fun <T : Any> jsonToObject(json: String, clazz: Class<T>): T =
     jacksonObjectMapper()
         .registerModule(JodaModule())
         .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
-        .readValue<T>(json)
+        .readValue(json, clazz)
+
+inline fun <reified T : Any> jsonToObject(json: String): T =
+    jsonToObject(json, T::class.java)
 
 /**
  * Converts a Unirest [HttpResponse] body into an object of type [T].
  */
-inline fun <reified T : Any> jsonNodeToObject(jsonNode: HttpResponse<JsonNode>): T {
-    return jsonToObject<T>(jsonNode.body.toString())
-}
+fun <T : Any> jsonNodeToObject(jsonNode: HttpResponse<JsonNode>, clazz: Class<T>): T =
+    jsonToObject(jsonNode.body.toString(), clazz)
+
+inline fun <reified T : Any> jsonNodeToObject(jsonNode: HttpResponse<JsonNode>): T =
+    jsonNodeToObject(jsonNode, T::class.java)
