@@ -9,8 +9,9 @@ import org.jetbrains.exposed.sql.jodatime.datetime
  * individual journeys and their step counts.
  */
 object Activities : Table("activities") {
+    const val DESCRIPTION_MAX_LENGTH = 100
     val id = integer("id").autoIncrement()
-    val description = varchar("description", 100)
+    val description = varchar("description", DESCRIPTION_MAX_LENGTH)
     val duration = double("duration")
     val calories = integer("calories")
     val steps = integer("steps").default(0)

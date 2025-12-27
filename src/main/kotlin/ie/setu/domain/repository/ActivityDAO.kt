@@ -16,6 +16,14 @@ import org.jetbrains.exposed.sql.transactions.transaction
  */
 class ActivityDAO {
 
+    private fun normalizeDescription(description: String): String {
+        return if (description.length <= Activities.DESCRIPTION_MAX_LENGTH) {
+            description
+        } else {
+            description.take(Activities.DESCRIPTION_MAX_LENGTH)
+        }
+    }
+
     /** Returns all activities regardless of user id. */
     fun getAll(): ArrayList<Activity> {
         val activitiesList: ArrayList<Activity> = arrayListOf()
@@ -48,8 +56,12 @@ class ActivityDAO {
     /** Persists a new [activity] and returns its generated id. */
     fun save(activity: Activity): Int {
         return transaction {
+            val normalizedDescription = normalizeDescription(activity.description)
+            if (normalizedDescription != activity.description) {
+                activity.description = normalizedDescription
+            }
             val activityId = Activities.insert {
-                it[description] = activity.description
+                it[description] = normalizedDescription
                 it[duration] = activity.duration
                 it[calories] = activity.calories
                 it[steps] = activity.steps
@@ -65,9 +77,13 @@ class ActivityDAO {
     /** Updates an existing activity identified by [activityId]. */
     fun updateByActivityId(activityId: Int, activityToUpdate: Activity) : Int{
         return transaction {
+            val normalizedDescription = normalizeDescription(activityToUpdate.description)
+            if (normalizedDescription != activityToUpdate.description) {
+                activityToUpdate.description = normalizedDescription
+            }
             Activities.update ({
                 Activities.id eq activityId}) {
-                it[description] = activityToUpdate.description
+                it[description] = normalizedDescription
                 it[duration] = activityToUpdate.duration
                 it[calories] = activityToUpdate.calories
                 it[steps] = activityToUpdate.steps
