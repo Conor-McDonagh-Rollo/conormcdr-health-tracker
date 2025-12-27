@@ -25,6 +25,15 @@
             <p class="text-muted mb-0" v-else>
               No steps logged yet. Take your first steps from the Shire.
             </p>
+            <div class="mt-3">
+              <div class="input-group">
+                <span class="input-group-text" id="input-role">Role</span>
+                <select class="form-select" id="role-select" v-model="role" @change="persistRole">
+                  <option value="user">User</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -69,7 +78,8 @@ app.component('home-page',
       data: () => ({
         users: [],
         activities: [],
-        milestones: []
+        milestones: [],
+        role: "user"
       }),
       computed: {
         fellowshipSteps() {
@@ -102,6 +112,7 @@ app.component('home-page',
         }
       },
       created() {
+        this.loadRole();
         axios.get("/api/users")
             .then(res => this.users = res.data)
             .catch(() => alert("Error while fetching users"));
@@ -118,6 +129,27 @@ app.component('home-page',
                 console.log("Error while fetching milestones", error);
               }
             });
+      },
+      methods: {
+        loadRole() {
+          try {
+            const storedRole = window.localStorage ? window.localStorage.getItem("mordorRole") : null;
+            if (storedRole) {
+              this.role = storedRole;
+            }
+          } catch (error) {
+            console.log("Unable to load saved role", error);
+          }
+        },
+        persistRole() {
+          try {
+            if (window.localStorage) {
+              window.localStorage.setItem("mordorRole", this.role);
+            }
+          } catch (error) {
+            console.log("Unable to persist role", error);
+          }
+        }
       }
     });
 </script>

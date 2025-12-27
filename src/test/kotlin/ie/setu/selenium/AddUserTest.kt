@@ -56,8 +56,12 @@ class AddUserTest {
         JavalinTest.test(app) { _, client ->
            transaction {
                 driver.get(client.origin)
-                driver.findElement(By.linkText("More Details...")).click()
-                driver.findElement(By.xpath("//main[@id='main-vue']/div/div/div/div/div/div/div/div[2]/button")).click()
+                js.executeScript("window.localStorage.setItem('mordorRole','admin');")
+                driver.navigate().refresh()
+                val detailsLink = driver.findElement(By.linkText("More Details..."))
+                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", detailsLink)
+                js.executeScript("arguments[0].click();", detailsLink)
+                driver.findElement(By.cssSelector("button[title='Add']")).click()
                 driver.findElement(By.name("name")).apply {
                     click()
                     clear()
@@ -68,7 +72,7 @@ class AddUserTest {
                     clear()
                     sendKeys("lisa@simpson.com")
                 }
-                driver.findElement(By.xpath("//main[@id='main-vue']/div/div/div/div/div/div[2]/button")).click()
+                driver.findElement(By.xpath("//button[normalize-space()='Add User']")).click()
                 driver.findElement(By.linkText("Lisa Simpson (lisa@simpson.com)")).click()
             }
        }

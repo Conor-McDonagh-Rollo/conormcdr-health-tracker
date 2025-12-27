@@ -9,6 +9,7 @@
           <div class="col" align="right">
             <button rel="tooltip" title="Add Milestone"
                     class="btn btn-info btn-simple btn-link"
+                    :disabled="!isAdmin"
                     @click="hideForm = !hideForm">
               <i class="fa fa-plus" aria-hidden="true"></i>
             </button>
@@ -16,7 +17,13 @@
         </div>
       </div>
       <div class="card-body">
-        <div :class="{ 'd-none': hideForm }" class="mb-3">
+        <div class="mb-3" v-if="!isAdmin">
+          <small class="text-muted">
+            Admin role required to add, edit, or delete milestones. Set your role on the home page.
+          </small>
+        </div>
+
+        <div :class="{ 'd-none': hideForm || !isAdmin }" class="mb-3">
           <form id="addMilestone">
             <div class="input-group mb-2">
               <div class="input-group-prepend">
@@ -37,7 +44,10 @@
               <input type="number" min="0" class="form-control" v-model.number="formData.targetSteps" name="targetSteps" placeholder="e.g. 300000 (steps from the Shire)"/>
             </div>
           </form>
-          <button rel="tooltip" :title="editingId ? 'Save Changes' : 'Add Milestone'" class="btn btn-primary" @click="saveMilestone()">
+          <button rel="tooltip" :title="editingId ? 'Save Changes' : 'Add Milestone'"
+                  class="btn btn-primary"
+                  :disabled="!isAdmin"
+                  @click="saveMilestone()">
             {{ editingId ? 'Save Changes' : 'Add Milestone' }}
           </button>
         </div>
@@ -57,10 +67,12 @@
             </div>
             <div>
               <button rel="tooltip" title="Edit Milestone" class="btn btn-info btn-simple btn-link"
+                      :disabled="!isAdmin"
                       @click="editMilestone(milestone, index)">
                 <i class="fa fa-pencil" aria-hidden="true"></i>
               </button>
               <button rel="tooltip" title="Delete Milestone" class="btn btn-info btn-simple btn-link"
+                      :disabled="!isAdmin"
                       @click="deleteMilestone(milestone, index)">
                 <i class="fas fa-trash" aria-hidden="true"></i>
               </button>
@@ -81,11 +93,28 @@ app.component("milestone-overview", {
     hideForm: true,
     editingId: null,
     editingIndex: null,
+    role: "user"
   }),
   created() {
+    this.loadRole();
     this.fetchMilestones();
   },
+  computed: {
+    isAdmin() {
+      return (this.role || "").toLowerCase() === "admin";
+    }
+  },
   methods: {
+    loadRole() {
+      try {
+        const storedRole = window.localStorage ? window.localStorage.getItem("mordorRole") : null;
+        if (storedRole) {
+          this.role = storedRole;
+        }
+      } catch (error) {
+        console.log("Unable to load saved role", error);
+      }
+    },
     fetchMilestones() {
       axios.get("/api/milestones")
           .then(res => this.milestones = res.data)
@@ -99,15 +128,20 @@ app.component("milestone-overview", {
           });
     },
     saveMilestone() {
+      if (!this.isAdmin) {
+        alert("Admin role required to modify milestones.");
+        return;
+      }
       const payload = {
         name: this.formData.name,
         description: this.formData.description,
         targetSteps: this.formData.targetSteps || 0
       };
+      const headers = { "X-User-Role": this.role };
 
       if (this.editingId) {
         const url = `/api/milestones/${this.editingId}`;
-        axios.patch(url, payload)
+        axios.patch(url, payload, { headers })
             .then(() => {
               this.editingId = null;
               this.editingIndex = null;
@@ -121,7 +155,7 @@ app.component("milestone-overview", {
             });
       } else {
         const url = `/api/milestones`;
-        axios.post(url, payload)
+        axios.post(url, payload, { headers })
             .then(response => {
               this.milestones.push(response.data);
               this.formData = {};
@@ -134,6 +168,9 @@ app.component("milestone-overview", {
       }
     },
     editMilestone(milestone, index) {
+      if (!this.isAdmin) {
+        return;
+      }
       this.formData = {
         name: milestone.name,
         description: milestone.description,
@@ -144,10 +181,15 @@ app.component("milestone-overview", {
       this.hideForm = false;
     },
     deleteMilestone(milestone, index) {
+      if (!this.isAdmin) {
+        alert("Admin role required to delete milestones.");
+        return;
+      }
       if (confirm('Are you sure you want to delete this milestone?', 'Warning')) {
         const id = milestone.id;
         const url = `/api/milestones/${id}`;
-        axios.delete(url)
+        const headers = { "X-User-Role": this.role };
+        axios.delete(url, { headers })
             .then(() => this.milestones.splice(index, 1))
             .catch(error => {
               console.log(error);

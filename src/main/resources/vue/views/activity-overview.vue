@@ -40,10 +40,12 @@
               <td>{{ formatDistance(activity.distanceKm) }}</td>
               <td>
                 <button rel="tooltip" title="Edit Journey" class="btn btn-info btn-simple btn-link"
+                        :disabled="!isAdmin"
                         @click="startEdit(activity)">
                   <i class="fa fa-pencil" aria-hidden="true"></i>
                 </button>
                 <button rel="tooltip" title="Delete Journey" class="btn btn-info btn-simple btn-link"
+                        :disabled="!isAdmin"
                         @click="deleteActivity(activity)">
                   <i class="fas fa-trash" aria-hidden="true"></i>
                 </button>
@@ -107,18 +109,39 @@ app.component("activity-overview", {
       calories: 0,
       steps: 0,
       distanceKm: 0
-    }
+    },
+    role: "user"
   }),
   created() {
+    this.loadRole();
     this.fetchActivities();
   },
+  computed: {
+    isAdmin() {
+      return (this.role || "").toLowerCase() === "admin";
+    }
+  },
   methods: {
+    loadRole() {
+      try {
+        const storedRole = window.localStorage ? window.localStorage.getItem("mordorRole") : null;
+        if (storedRole) {
+          this.role = storedRole;
+        }
+      } catch (error) {
+        console.log("Unable to load saved role", error);
+      }
+    },
     fetchActivities() {
       axios.get("/api/activities")
           .then(res => this.activities = res.data)
           .catch(() => alert("Error while fetching journeys"));
     },
     startEdit(activity) {
+      if (!this.isAdmin) {
+        alert("Admin role required to edit journeys.");
+        return;
+      }
       this.editingActivity = activity;
       this.editForm = {
         description: activity.description,
@@ -133,8 +156,13 @@ app.component("activity-overview", {
     },
     saveActivity() {
       if (!this.editingActivity) return;
+      if (!this.isAdmin) {
+        alert("Admin role required to edit journeys.");
+        return;
+      }
       const a = this.editingActivity;
       const url = `/api/activities/${a.id}`;
+      const headers = { "X-User-Role": this.role };
       axios.patch(url, {
         description: this.editForm.description,
         duration: this.editForm.duration,
@@ -143,7 +171,7 @@ app.component("activity-overview", {
         userId: a.userId,
         steps: this.editForm.steps || 0,
         distanceKm: this.editForm.distanceKm || 0
-      })
+      }, { headers })
           .then(() => {
             this.editingActivity = null;
             this.fetchActivities();
@@ -154,11 +182,16 @@ app.component("activity-overview", {
           });
     },
     deleteActivity(activity) {
+      if (!this.isAdmin) {
+        alert("Admin role required to delete journeys.");
+        return;
+      }
       if (!confirm('Are you sure you want to delete this journey?', 'Warning')) {
         return;
       }
       const url = `/api/activities/${activity.id}`;
-      axios.delete(url)
+      const headers = { "X-User-Role": this.role };
+      axios.delete(url, { headers })
           .then(() => this.fetchActivities())
           .catch(error => {
             console.log(error);
