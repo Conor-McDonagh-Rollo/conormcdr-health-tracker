@@ -94,6 +94,19 @@
           </div>
           <small class="text-muted">Goal: 1,800,000 steps to reach Mordor</small>
         </div>
+        <div class="mb-3">
+          <h6>Badges unlocked</h6>
+          <p v-if="achievements.length === 0" class="text-muted mb-1">
+            No badges earned yet.
+          </p>
+          <div v-else class="d-flex flex-wrap">
+            <div v-for="achievement in achievements" :key="achievement.id" class="me-3 mb-2 text-center">
+              <img v-if="achievement.badgePath" :src="achievement.badgePath" alt="Badge"
+                   class="badge-icon"/>
+              <div>{{ achievement.name }}</div>
+            </div>
+          </div>
+        </div>
         <ul>
           <li v-for="(activity, index) in activities" :key="activity.id">
             {{ activity.description }} for {{ activity.duration }} minutes
@@ -126,6 +139,7 @@ app.component("user-profile", {
     },
     noUserFound: false,
     activities: [],
+    achievements: [],
     newSteps: null,
     newStepsDescription: "",
     map: null,
@@ -152,6 +166,7 @@ app.component("user-profile", {
         .catch(error => {
           console.log("No activities added yet (this is ok): " + error)
         })
+    this.fetchAchievements()
   },
   mounted: function () {
     this.$nextTick(() => {
@@ -185,6 +200,19 @@ app.component("user-profile", {
       } catch (error) {
         console.log("Unable to load saved role", error);
       }
+    },
+    fetchAchievements() {
+      const userId = this.$javalin.pathParams["user-id"];
+      const url = `/api/users/${userId}/achievements`;
+      axios.get(url)
+          .then(res => this.achievements = res.data)
+          .catch(error => {
+            if (error.response && error.response.status === 404) {
+              this.achievements = [];
+            } else {
+              console.log("No achievements added yet (this is ok): " + error)
+            }
+          });
     },
     initMap: function () {
       if (!window.L) {
@@ -281,6 +309,7 @@ app.component("user-profile", {
       })
           .then(response => {
             this.activities.push(response.data);
+            this.fetchAchievements();
             this.clearMapPins();
           })
           .catch(error => {
@@ -374,6 +403,7 @@ app.component("user-profile", {
       })
           .then(response => {
             this.activities.push(response.data);
+            this.fetchAchievements();
             this.newSteps = null;
             this.newStepsDescription = "";
           })
@@ -386,3 +416,11 @@ app.component("user-profile", {
 
 });
 </script>
+
+<style>
+.badge-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+</style>

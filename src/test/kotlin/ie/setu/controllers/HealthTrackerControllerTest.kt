@@ -1,6 +1,7 @@
 package ie.setu.controllers
 
 import ie.setu.domain.Activity
+import ie.setu.domain.Achievement
 import ie.setu.domain.Milestone
 import ie.setu.domain.User
 import ie.setu.domain.db.Activities
@@ -28,7 +29,9 @@ import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import kong.unirest.core.Unirest
 import com.sun.net.httpserver.HttpServer
+import java.io.File
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import org.joda.time.DateTime
 import org.junit.jupiter.api.Assertions.assertNotEquals
 
@@ -601,6 +604,59 @@ class HealthTrackerTest {
         }
     }
 
+    @Nested
+    inner class AchievementAdminAccess {
+
+        @Test
+        fun `adding an achievement without admin role returns 403 response`() {
+            val badgeFile = createTempBadge()
+            val response = addAchievement(
+                name = "First Mile",
+                description = "Completed a mile",
+                targetDistanceKm = 1.6,
+                badgeFile = badgeFile,
+                role = "user"
+            )
+            assertEquals(403, response.status)
+        }
+
+        @Test
+        fun `earned achievements returned when distance meets target`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            addActivity(
+                description = "Evening walk",
+                duration = 30.0,
+                calories = 120,
+                started = DateTime.now(),
+                userId = addedUser.id,
+                steps = 2000,
+                distanceKm = 3.2
+            )
+
+            val badgeFile = createTempBadge()
+            addAchievement(
+                name = "First Mile",
+                description = "Completed a mile",
+                targetDistanceKm = 1.6,
+                badgeFile = badgeFile,
+                role = "admin"
+            )
+            addAchievement(
+                name = "Ten K",
+                description = "Completed ten kilometers",
+                targetDistanceKm = 10.0,
+                badgeFile = badgeFile,
+                role = "admin"
+            )
+
+            val response = retrieveAchievementsByUserId(addedUser.id)
+            assertEquals(200, response.status)
+            val achievements = jsonNodeToObject<Array<Achievement>>(response)
+            assertEquals(1, achievements.size)
+            assertEquals("First Mile", achievements[0].name)
+        }
+    }
+
     //helper function to add a test user to the database
     private fun addUser (name: String, email: String, role: String? = "admin"): HttpResponse<JsonNode> {
         val request = Unirest.post(origin + "/api/users")
@@ -713,7 +769,8 @@ class HealthTrackerTest {
 
     //helper function to add an activity
     private fun addActivity(description: String, duration: Double, calories: Int,
-                            started: DateTime, userId: Int): HttpResponse<JsonNode> {
+                            started: DateTime, userId: Int, steps: Int = 0,
+                            distanceKm: Double = 0.0): HttpResponse<JsonNode> {
         return Unirest.post(origin + "/api/activities")
             .body("""
                 {
@@ -721,10 +778,41 @@ class HealthTrackerTest {
                    "duration":$duration,
                    "calories":$calories,
                    "started":"$started",
-                   "userId":$userId
+                   "userId":$userId,
+                   "steps":$steps,
+                   "distanceKm":$distanceKm
                 }
             """.trimIndent())
             .asJson()
+    }
+
+    private fun createTempBadge(): File {
+        val tempFile = Files.createTempFile("badge", ".png").toFile()
+        tempFile.writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47))
+        tempFile.deleteOnExit()
+        return tempFile
+    }
+
+    private fun addAchievement(
+        name: String,
+        description: String,
+        targetDistanceKm: Double,
+        badgeFile: File,
+        role: String? = null
+    ): HttpResponse<JsonNode> {
+        val request = Unirest.post(origin + "/api/achievements")
+            .field("name", name)
+            .field("description", description)
+            .field("targetDistanceKm", targetDistanceKm.toString())
+            .field("badge", badgeFile)
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
+    }
+
+    private fun retrieveAchievementsByUserId(id: Int): HttpResponse<JsonNode> {
+        return Unirest.get(origin + "/api/users/${id}/achievements").asJson()
     }
 
     private fun addMilestone(

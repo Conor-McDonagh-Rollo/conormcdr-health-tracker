@@ -53,6 +53,16 @@ class ActivityDAO {
         }
     }
 
+    /** Returns the total distance (km) logged by a user. */
+    fun totalDistanceKmByUserId(userId: Int): Double {
+        return transaction {
+            Activities
+                .selectAll()
+                .where { Activities.userId eq userId }
+                .fold(0.0) { acc, row -> acc + row[Activities.distanceKm] }
+        }
+    }
+
     /** Persists a new [activity] and returns its generated id. */
     fun save(activity: Activity): Int {
         return transaction {

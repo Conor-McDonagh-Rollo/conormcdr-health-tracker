@@ -2,9 +2,11 @@ package ie.setu.controllers
 
 import ie.setu.domain.Activity
 import ie.setu.domain.ActivityMapRequest
+import ie.setu.domain.Achievement
 import ie.setu.domain.Milestone
 import ie.setu.domain.User
 import ie.setu.domain.repository.ActivityDAO
+import ie.setu.domain.repository.AchievementDAO
 import ie.setu.domain.repository.MilestoneDAO
 import ie.setu.domain.repository.UserDAO
 import ie.setu.utils.jsonToObject
@@ -14,7 +16,12 @@ import ie.setu.utils.estimateDurationMinutes
 import ie.setu.utils.estimateStepsFromDistanceKm
 import ie.setu.utils.haversineDistanceKm
 import io.javalin.http.Context
+import io.javalin.http.UploadedFile
 import org.joda.time.DateTime
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
@@ -29,7 +36,10 @@ object HealthTrackerController {
     private val userDao = UserDAO()
     private val activityDAO = ActivityDAO()
     private val milestoneDAO = MilestoneDAO()
+    private val achievementDAO = AchievementDAO()
     private const val ADMIN_ROLE = "admin"
+    private const val UPLOADS_DIR = "uploads"
+    private const val BADGES_DIR = "badges"
 
     private fun requireAdmin(ctx: Context): Boolean {
         val role = ctx.header("X-User-Role") ?: ""
@@ -39,6 +49,20 @@ object HealthTrackerController {
         ctx.status(403)
         ctx.json("Admin role required.")
         return false
+    }
+
+    private fun storeBadgeFile(uploadedFile: UploadedFile): String {
+        val badgeDir = Path.of(UPLOADS_DIR, BADGES_DIR)
+        Files.createDirectories(badgeDir)
+        val originalName = Path.of(uploadedFile.filename()).fileName.toString()
+        val extension = originalName.substringAfterLast('.', "")
+        val safeExtension = if (extension.isNotBlank()) ".${extension}" else ""
+        val filename = "${UUID.randomUUID()}$safeExtension"
+        val targetPath = badgeDir.resolve(filename)
+        uploadedFile.content().use { input ->
+            Files.copy(input, targetPath, StandardCopyOption.REPLACE_EXISTING)
+        }
+        return "/$UPLOADS_DIR/$BADGES_DIR/$filename"
     }
 
     /** Returns all users, or 404 if none exist. */
@@ -318,6 +342,126 @@ object HealthTrackerController {
         }
         val milestone: Milestone = jsonToObject(ctx.body())
         if ((milestoneDAO.update(id = ctx.pathParam("milestone-id").toInt(), milestone = milestone)) != 0)
+            ctx.status(204)
+        else
+            ctx.status(404)
+    }
+
+    //--------------------------------------------------------------
+    // AchievementDAO specifics
+    //-------------------------------------------------------------
+    /** Returns all achievements, or 404 if none exist. */
+    fun getAllAchievements(ctx: Context) {
+        val achievements = achievementDAO.getAll()
+        if (achievements.isNotEmpty()) {
+            ctx.status(200)
+        } else {
+            ctx.status(404)
+        }
+        ctx.json(achievements)
+    }
+
+    /** Returns a single achievement identified by `achievement-id`. */
+    fun getAchievementById(ctx: Context) {
+        val achievement = achievementDAO.findById(ctx.pathParam("achievement-id").toInt())
+        if (achievement != null) {
+            ctx.json(achievement)
+            ctx.status(200)
+        } else {
+            ctx.status(404)
+        }
+    }
+
+    /** Returns achievements earned by the user identified by `user-id`. */
+    fun getAchievementsByUserId(ctx: Context) {
+        val userId = ctx.pathParam("user-id").toInt()
+        if (userDao.findById(userId) == null) {
+            ctx.status(404)
+            return
+        }
+        val totalDistance = activityDAO.totalDistanceKmByUserId(userId)
+        val achievements = achievementDAO.findByTargetDistance(totalDistance)
+        if (achievements.isNotEmpty()) {
+            ctx.json(achievements)
+            ctx.status(200)
+        } else {
+            ctx.status(404)
+        }
+    }
+
+    /**
+     * Creates a new achievement with a badge icon. Requires admin role.
+     */
+    fun addAchievement(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
+        val name = ctx.formParam("name")
+        val description = ctx.formParam("description")
+        val targetDistanceKm = ctx.formParam("targetDistanceKm")?.toDoubleOrNull()
+        val badge = ctx.uploadedFile("badge")
+
+        if (name.isNullOrBlank() || description.isNullOrBlank() || targetDistanceKm == null || badge == null) {
+            ctx.status(400)
+            ctx.json("Missing required achievement fields.")
+            return
+        }
+
+        val badgePath = storeBadgeFile(badge)
+        val achievement = Achievement(
+            id = 0,
+            name = name,
+            description = description,
+            targetDistanceKm = targetDistanceKm,
+            badgePath = badgePath
+        )
+        val achievementId = achievementDAO.save(achievement)
+        if (achievementId != null) {
+            achievement.id = achievementId
+            ctx.json(achievement)
+            ctx.status(201)
+        }
+    }
+
+    /**
+     * Updates an existing achievement. Requires admin role.
+     */
+    fun updateAchievement(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
+        val achievementId = ctx.pathParam("achievement-id").toInt()
+        val current = achievementDAO.findById(achievementId)
+        if (current == null) {
+            ctx.status(404)
+            return
+        }
+
+        val name = ctx.formParam("name") ?: current.name
+        val description = ctx.formParam("description") ?: current.description
+        val targetDistanceKm = ctx.formParam("targetDistanceKm")?.toDoubleOrNull() ?: current.targetDistanceKm
+        val badge = ctx.uploadedFile("badge")
+        val badgePath = if (badge != null) storeBadgeFile(badge) else current.badgePath
+
+        val updated = current.copy(
+            name = name,
+            description = description,
+            targetDistanceKm = targetDistanceKm,
+            badgePath = badgePath
+        )
+        if (achievementDAO.update(achievementId, updated) != 0) {
+            ctx.status(204)
+        } else {
+            ctx.status(404)
+        }
+    }
+
+    /** Deletes the achievement identified by `achievement-id`. Requires admin role. */
+    fun deleteAchievement(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
+        if (achievementDAO.delete(ctx.pathParam("achievement-id").toInt()) != 0)
             ctx.status(204)
         else
             ctx.status(404)

@@ -2,6 +2,7 @@ package ie.setu.helpers
 
 import ie.setu.domain.db.Users
 import ie.setu.domain.db.Activities
+import ie.setu.domain.db.Achievements
 import ie.setu.domain.db.Milestones
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -28,15 +29,15 @@ object TestDatabaseConfig {
             initialised = true
 
             transaction {
-                SchemaUtils.create(Users, Activities, Milestones)
+                SchemaUtils.create(Users, Activities, Milestones, Achievements)
             }
         }
     }
 
     fun reset() {
         transaction {
-            SchemaUtils.drop(Users, Activities, Milestones)
-            SchemaUtils.create(Users, Activities, Milestones)
+            SchemaUtils.drop(Users, Activities, Milestones, Achievements)
+            SchemaUtils.create(Users, Activities, Milestones, Achievements)
         }
     }
 }
