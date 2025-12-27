@@ -36,7 +36,10 @@ class JavalinConfig {
 
         }
     ).apply {
-        exception(Exception::class.java) { e, ctx -> e.printStackTrace() }
+        exception(Exception::class.java) { e, ctx ->
+            e.printStackTrace()
+            ctx.status(500)
+        }
         error(404) { ctx -> ctx.json("404 - Not Found") }
     }
 
@@ -112,7 +115,7 @@ class JavalinConfig {
      * to 8080 for local development.
      */
     private fun getRemoteAssignedPort(): Int {
-        val remotePort = System.getenv("PORT")
+        val remotePort = System.getProperty("PORT") ?: System.getenv("PORT")
         return if (remotePort != null) {
             Integer.parseInt(remotePort)
         } else 8080

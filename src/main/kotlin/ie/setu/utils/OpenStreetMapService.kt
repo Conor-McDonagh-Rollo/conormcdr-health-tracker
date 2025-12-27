@@ -13,32 +13,36 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object OpenStreetMapService {
 
-    private val logger = KotlinLogging.logger {}
+    private val logger = KotlinLogging.logger("OpenStreetMapService")
     private val httpClient = HttpClient.newBuilder()
         .connectTimeout(requestTimeout())
         .version(HttpClient.Version.HTTP_1_1)
         .build()
     private val mapper = jsonObjectMapper()
     private val cache = ConcurrentHashMap<String, String>()
+    internal var envOverrides: Map<String, String>? = null
 
     private fun baseUrl(): String {
-        val configured = System.getProperty("OPENSTREETMAP_BASE_URL")
-            ?: System.getenv("OPENSTREETMAP_BASE_URL")
+        val configured = envOrProperty("OPENSTREETMAP_BASE_URL")
             ?: "https://nominatim.openstreetmap.org"
         return configured.trimEnd('/')
     }
 
     private fun requestTimeout(): Duration {
-        val raw = System.getProperty("OPENSTREETMAP_TIMEOUT_MS")
-            ?: System.getenv("OPENSTREETMAP_TIMEOUT_MS")
+        val raw = envOrProperty("OPENSTREETMAP_TIMEOUT_MS")
         val timeoutMs = raw?.toLongOrNull()?.coerceAtLeast(500) ?: 3000L
         return Duration.ofMillis(timeoutMs)
     }
 
     private fun userAgent(): String =
-        System.getProperty("OPENSTREETMAP_USER_AGENT")
-            ?: System.getenv("OPENSTREETMAP_USER_AGENT")
+        envOrProperty("OPENSTREETMAP_USER_AGENT")
             ?: "health-tracker-rest/1.0 (contact: example@example.com)"
+
+    private fun envOrProperty(name: String): String? {
+        val property = System.getProperty(name)
+        val env = envOverrides?.get(name) ?: System.getenv(name)
+        return property ?: env
+    }
 
     fun reverseGeocode(lat: Double, lon: Double): String? {
         val key = "%.5f,%.5f".format(lat, lon)

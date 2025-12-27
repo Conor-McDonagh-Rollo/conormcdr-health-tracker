@@ -111,11 +111,9 @@ object HealthTrackerController {
         }
         val user : User = jsonToObject(ctx.body())
         val userId = userDao.save(user)
-        if (userId != null) {
-            user.id = userId
-            ctx.json(user)
-            ctx.status(201)
-        }
+        user.id = userId
+        ctx.json(user)
+        ctx.status(201)
     }
 
     /** Deletes the user identified by `user-id`, returning 204 or 404. */
@@ -317,11 +315,9 @@ object HealthTrackerController {
         }
         val milestone: Milestone = jsonToObject(ctx.body())
         val milestoneId = milestoneDAO.save(milestone)
-        if (milestoneId != null) {
-            milestone.id = milestoneId
-            ctx.json(milestone)
-            ctx.status(201)
-        }
+        milestone.id = milestoneId
+        ctx.json(milestone)
+        ctx.status(201)
     }
 
     /** Deletes a milestone identified by `milestone-id`. */
@@ -416,11 +412,9 @@ object HealthTrackerController {
             badgePath = badgePath
         )
         val achievementId = achievementDAO.save(achievement)
-        if (achievementId != null) {
-            achievement.id = achievementId
-            ctx.json(achievement)
-            ctx.status(201)
-        }
+        achievement.id = achievementId
+        ctx.json(achievement)
+        ctx.status(201)
     }
 
     /**
@@ -449,11 +443,8 @@ object HealthTrackerController {
             targetDistanceKm = targetDistanceKm,
             badgePath = badgePath
         )
-        if (achievementDAO.update(achievementId, updated) != 0) {
-            ctx.status(204)
-        } else {
-            ctx.status(404)
-        }
+        achievementDAO.update(achievementId, updated)
+        ctx.status(204)
     }
 
     /** Deletes the achievement identified by `achievement-id`. Requires admin role. */

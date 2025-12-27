@@ -44,9 +44,9 @@ class MilestoneDAOTest {
                 val m2 = Milestone(0, "Rivendell", "Elven refuge", 300_000)
                 val m3 = Milestone(0, "Moria", "Dark halls", 700_000)
 
-                val id1 = dao.save(m1)!!
-                val id2 = dao.save(m2)!!
-                val id3 = dao.save(m3)!!
+                val id1 = dao.save(m1)
+                val id2 = dao.save(m2)
+                val id3 = dao.save(m3)
 
                 val all = dao.getAll()
                 assertEquals(3, all.size)
@@ -91,7 +91,7 @@ class MilestoneDAOTest {
             transaction {
                 SchemaUtils.create(Milestones)
                 val dao = MilestoneDAO()
-                val id = dao.save(Milestone(0, "Rivendell", "Elven refuge", 300_000))!!
+                val id = dao.save(Milestone(0, "Rivendell", "Elven refuge", 300_000))
 
                 val updated = Milestone(id, "Rivendell", "Rest before the Misty Mountains", 320_000)
                 dao.update(id, updated)
@@ -137,7 +137,7 @@ class MilestoneDAOTest {
             transaction {
                 SchemaUtils.create(Milestones)
                 val dao = MilestoneDAO()
-                val id = dao.save(Milestone(0, "Rivendell", "Elven refuge", 300_000))!!
+                val id = dao.save(Milestone(0, "Rivendell", "Elven refuge", 300_000))
 
                 assertEquals(1, dao.getAll().size)
                 val rows = dao.delete(id)

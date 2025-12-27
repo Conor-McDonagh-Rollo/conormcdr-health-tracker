@@ -53,7 +53,7 @@ class UserDAO {
      * Adds a [user] to the Users table.
      * @return the id of the user following the add.
      */
-    fun save(user: User) : Int?{
+    fun save(user: User) : Int{
         return transaction {
             Users.insert {
                 it[name] = user.name

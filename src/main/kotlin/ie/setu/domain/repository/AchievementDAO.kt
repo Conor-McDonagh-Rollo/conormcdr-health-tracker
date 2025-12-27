@@ -50,7 +50,7 @@ class AchievementDAO {
         }
     }
 
-    fun save(achievement: Achievement): Int? {
+    fun save(achievement: Achievement): Int {
         return transaction {
             Achievements.insert {
                 it[name] = achievement.name
