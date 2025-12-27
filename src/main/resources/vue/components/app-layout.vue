@@ -27,6 +27,9 @@
             <li class="nav-item">
               <a class="nav-link" href="/milestones">Milestones</a>
             </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/achievements">Achievements</a>
+            </li>
           </ul>
         </div>
       </nav>

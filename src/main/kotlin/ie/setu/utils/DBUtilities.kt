@@ -2,6 +2,7 @@ package ie.setu.utils
 
 import ie.setu.domain.*
 import ie.setu.domain.db.Activities
+import ie.setu.domain.db.Achievements
 import ie.setu.domain.db.Milestones
 import ie.setu.domain.db.Users
 import org.jetbrains.exposed.sql.ResultRow
@@ -31,4 +32,13 @@ fun mapToMilestone(it: ResultRow) = Milestone(
     name = it[Milestones.name],
     description = it[Milestones.description],
     targetSteps = it[Milestones.targetSteps]
+)
+
+/** Maps a [ResultRow] from the `achievements` table to an [Achievement]. */
+fun mapToAchievement(it: ResultRow) = Achievement(
+    id = it[Achievements.id],
+    name = it[Achievements.name],
+    description = it[Achievements.description],
+    targetDistanceKm = it[Achievements.targetDistanceKm],
+    badgePath = it[Achievements.badgePath]
 )

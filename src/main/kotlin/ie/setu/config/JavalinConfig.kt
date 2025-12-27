@@ -6,6 +6,7 @@ import io.javalin.Javalin
 import io.javalin.http.staticfiles.Location
 import io.javalin.json.JavalinJackson
 import io.javalin.vue.VueComponent
+import java.io.File
 
 /**
  * Configures and starts the Javalin HTTP server.
@@ -20,6 +21,15 @@ class JavalinConfig {
         { config ->
             config.jsonMapper(JavalinJackson(jsonObjectMapper()))
             config.staticFiles.enableWebjars()
+            val uploadsDir = File("uploads")
+            if (!uploadsDir.exists()) {
+                uploadsDir.mkdirs()
+            }
+            config.staticFiles.add {
+                it.hostedPath = "/uploads"
+                it.directory = uploadsDir.path
+                it.location = Location.EXTERNAL
+            }
             // Serve Vue components from the classpath so the packaged jar can find them
             config.vue.rootDirectory("/vue", Location.CLASSPATH)
             config.vue.vueInstanceNameInJs = "app"
@@ -74,6 +84,16 @@ class JavalinConfig {
         app.patch("/api/milestones/{milestone-id}", HealthTrackerController::updateMilestone)
         app.delete("/api/milestones/{milestone-id}", HealthTrackerController::deleteMilestone)
 
+        //---------------------
+        // Achievements API paths
+        //---------------------
+        app.get("/api/achievements", HealthTrackerController::getAllAchievements)
+        app.get("/api/achievements/{achievement-id}", HealthTrackerController::getAchievementById)
+        app.post("/api/achievements", HealthTrackerController::addAchievement)
+        app.patch("/api/achievements/{achievement-id}", HealthTrackerController::updateAchievement)
+        app.delete("/api/achievements/{achievement-id}", HealthTrackerController::deleteAchievement)
+        app.get("/api/users/{user-id}/achievements", HealthTrackerController::getAchievementsByUserId)
+
         // The @routeComponent that we added in layout.html earlier will be replaced
         // by the String inside the VueComponent. This means a call to / will load
         // the layout and display our <home-page> component.
@@ -83,6 +103,7 @@ class JavalinConfig {
         app.get("/users/{user-id}/activities", VueComponent("<user-activity-overview></user-activity-overview>"))
         app.get("/activities", VueComponent("<activity-overview></activity-overview>"))
         app.get("/milestones", VueComponent("<milestone-overview></milestone-overview>"))
+        app.get("/achievements", VueComponent("<achievement-overview></achievement-overview>"))
     }
 
     /**

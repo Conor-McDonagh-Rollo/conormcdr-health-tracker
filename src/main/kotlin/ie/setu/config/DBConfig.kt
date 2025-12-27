@@ -1,6 +1,7 @@
 package ie.setu.config
 
 import ie.setu.domain.db.Activities
+import ie.setu.domain.db.Achievements
 import ie.setu.domain.db.Milestones
 import ie.setu.domain.db.Users
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -51,7 +52,7 @@ class DbConfig {
                     password = PGPASSWORD
                 )
                 transaction {
-                    SchemaUtils.createMissingTablesAndColumns(Users, Activities, Milestones)
+                    SchemaUtils.createMissingTablesAndColumns(Users, Activities, Milestones, Achievements)
                 }
             } else {
                 logger.info { "Using remote PostgreSQL instance." }
