@@ -3,6 +3,7 @@ package ie.setu.config
 import ie.setu.controllers.HealthTrackerController
 import ie.setu.utils.jsonObjectMapper
 import io.javalin.Javalin
+import io.javalin.http.staticfiles.Location
 import io.javalin.json.JavalinJackson
 import io.javalin.vue.VueComponent
 
@@ -19,6 +20,8 @@ class JavalinConfig {
         { config ->
             config.jsonMapper(JavalinJackson(jsonObjectMapper()))
             config.staticFiles.enableWebjars()
+            // Serve Vue components from the classpath so the packaged jar can find them
+            config.vue.rootDirectory("/vue", Location.CLASSPATH)
             config.vue.vueInstanceNameInJs = "app"
 
         }
@@ -51,6 +54,7 @@ class JavalinConfig {
         app.get("/api/users/email/{email}", HealthTrackerController::getUserByEmail)
         app.get("/api/users/{user-id}/activities", HealthTrackerController::getActivitiesByUserId)
         app.delete("/api/users/{user-id}/activities", HealthTrackerController::deleteActivityByUserId)
+        app.post("/api/users/{user-id}/activities/map", HealthTrackerController::addActivityFromMap)
 
         //---------------------
         // Activities API paths

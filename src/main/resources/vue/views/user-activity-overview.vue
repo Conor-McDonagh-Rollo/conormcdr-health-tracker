@@ -5,6 +5,9 @@
     <ul>
       <li v-for="activity in activities">
         {{activity.id}}: {{activity.description}} for {{activity.duration}} minutes
+        <span v-if="activity.distanceKm && activity.distanceKm > 0">
+          - {{ activity.distanceKm.toFixed(2) }} km
+        </span>
       </li>
     </ul>
   </div>

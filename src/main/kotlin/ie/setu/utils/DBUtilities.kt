@@ -21,7 +21,8 @@ fun mapToActivity(it: ResultRow) = Activity(
     calories = it[Activities.calories],
     started = it[Activities.started],
     userId = it[Activities.userId],
-    steps = it[Activities.steps]
+    steps = it[Activities.steps],
+    distanceKm = it[Activities.distanceKm]
 )
 
 /** Maps a [ResultRow] from the `milestones` table to a [Milestone]. */

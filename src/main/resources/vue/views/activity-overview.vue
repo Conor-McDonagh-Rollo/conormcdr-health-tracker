@@ -21,6 +21,7 @@
               <th>Duration (mins)</th>
               <th>Calories</th>
               <th>Steps</th>
+              <th>Distance (km)</th>
               <th>Actions</th>
             </tr>
             </thead>
@@ -36,6 +37,7 @@
               <td>{{ activity.duration }}</td>
               <td>{{ activity.calories }}</td>
               <td>{{ activity.steps || 0 }}</td>
+              <td>{{ formatDistance(activity.distanceKm) }}</td>
               <td>
                 <button rel="tooltip" title="Edit Journey" class="btn btn-info btn-simple btn-link"
                         @click="startEdit(activity)">
@@ -77,6 +79,12 @@
                 </div>
                 <input type="number" min="0" class="form-control" v-model.number="editForm.steps" />
               </div>
+              <div class="input-group mb-2">
+                <div class="input-group-prepend">
+                  <span class="input-group-text">Distance (km)</span>
+                </div>
+                <input type="number" min="0" step="0.01" class="form-control" v-model.number="editForm.distanceKm" readonly />
+              </div>
             </form>
             <button class="btn btn-primary me-2" @click="saveActivity()">Save</button>
             <button class="btn btn-secondary" @click="cancelEdit()">Cancel</button>
@@ -97,7 +105,8 @@ app.component("activity-overview", {
       description: "",
       duration: 0,
       calories: 0,
-      steps: 0
+      steps: 0,
+      distanceKm: 0
     }
   }),
   created() {
@@ -115,7 +124,8 @@ app.component("activity-overview", {
         description: activity.description,
         duration: activity.duration,
         calories: activity.calories,
-        steps: activity.steps || 0
+        steps: activity.steps || 0,
+        distanceKm: activity.distanceKm || 0
       };
     },
     cancelEdit() {
@@ -131,7 +141,8 @@ app.component("activity-overview", {
         calories: this.editForm.calories,
         started: a.started,
         userId: a.userId,
-        steps: this.editForm.steps || 0
+        steps: this.editForm.steps || 0,
+        distanceKm: this.editForm.distanceKm || 0
       })
           .then(() => {
             this.editingActivity = null;
@@ -153,6 +164,12 @@ app.component("activity-overview", {
             console.log(error);
             alert("Error deleting journey");
           });
+    },
+    formatDistance(distanceKm) {
+      if (!distanceKm) {
+        return "-";
+      }
+      return Number(distanceKm).toFixed(2);
     }
   }
 });

@@ -1,15 +1,21 @@
 package ie.setu.controllers
 
 import ie.setu.domain.Activity
+import ie.setu.domain.ActivityMapRequest
 import ie.setu.domain.Milestone
 import ie.setu.domain.User
 import ie.setu.domain.repository.ActivityDAO
 import ie.setu.domain.repository.MilestoneDAO
 import ie.setu.domain.repository.UserDAO
-import ie.setu.utils.jsonObjectMapper
 import ie.setu.utils.jsonToObject
-import io.github.oshai.kotlinlogging.KotlinLogging
+import ie.setu.utils.OpenStreetMapService
+import ie.setu.utils.estimateCalories
+import ie.setu.utils.estimateDurationMinutes
+import ie.setu.utils.estimateStepsFromDistanceKm
+import ie.setu.utils.haversineDistanceKm
 import io.javalin.http.Context
+import org.joda.time.DateTime
+import kotlin.math.roundToInt
 
 /**
  * Javalin controller exposing REST endpoints for users, activities
@@ -152,6 +158,48 @@ object HealthTrackerController {
         else{
             ctx.status(404)
         }
+    }
+
+    /**
+     * Creates a new activity from two map points, auto-generating
+     * the description and distance using OpenStreetMap.
+     */
+    fun addActivityFromMap(ctx: Context) {
+        val userId = ctx.pathParam("user-id").toInt()
+        if (userDao.findById(userId) == null) {
+            ctx.status(404)
+            return
+        }
+
+        val request: ActivityMapRequest = jsonToObject(ctx.body())
+        val rawDistanceKm = haversineDistanceKm(
+            request.startLat,
+            request.startLng,
+            request.endLat,
+            request.endLng
+        )
+        val distanceKm = (rawDistanceKm * 100.0).roundToInt() / 100.0
+        val startName = OpenStreetMapService.reverseGeocode(request.startLat, request.startLng)
+            ?: "Start (${request.startLat}, ${request.startLng})"
+        val endName = OpenStreetMapService.reverseGeocode(request.endLat, request.endLng)
+            ?: "End (${request.endLat}, ${request.endLng})"
+        val steps = estimateStepsFromDistanceKm(rawDistanceKm)
+
+        val activity = Activity(
+            id = 0,
+            description = "From $startName to $endName",
+            duration = estimateDurationMinutes(steps),
+            calories = estimateCalories(steps),
+            started = DateTime.now(),
+            userId = userId,
+            steps = steps,
+            distanceKm = distanceKm
+        )
+
+        val activityId = activityDAO.save(activity)
+        activity.id = activityId
+        ctx.json(activity)
+        ctx.status(201)
     }
 
     /** Deletes a single activity identified by `activity-id`. */

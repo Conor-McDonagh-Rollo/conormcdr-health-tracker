@@ -53,6 +53,7 @@ class ActivityDAO {
                 it[duration] = activity.duration
                 it[calories] = activity.calories
                 it[steps] = activity.steps
+                it[distanceKm] = activity.distanceKm
                 it[started] = activity.started
                 it[userId] = activity.userId
             } get Activities.id
@@ -70,6 +71,7 @@ class ActivityDAO {
                 it[duration] = activityToUpdate.duration
                 it[calories] = activityToUpdate.calories
                 it[steps] = activityToUpdate.steps
+                it[distanceKm] = activityToUpdate.distanceKm
                 it[started] = activityToUpdate.started
                 it[userId] = activityToUpdate.userId
             }

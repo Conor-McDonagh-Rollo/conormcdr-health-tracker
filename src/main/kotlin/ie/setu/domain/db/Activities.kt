@@ -14,6 +14,7 @@ object Activities : Table("activities") {
     val duration = double("duration")
     val calories = integer("calories")
     val steps = integer("steps").default(0)
+    val distanceKm = double("distance_km").default(0.0)
     val started = datetime("started")
     val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
 

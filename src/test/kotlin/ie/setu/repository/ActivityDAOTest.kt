@@ -70,13 +70,15 @@ class ActivityDAOTest {
                     calories = 50,
                     started = DateTime.now(),
                     userId = 1,
-                    steps = 12_345
+                    steps = 12_345,
+                    distanceKm = 12.34
                 )
 
                 val id = activityDAO.save(steppedActivity)
                 val retrieved = activityDAO.findByActivityId(id)
 
                 assertEquals(12_345, retrieved?.steps)
+                assertEquals(12.34, retrieved?.distanceKm ?: 0.0, 0.01)
             }
         }
     }

@@ -59,6 +59,24 @@
           <input type="text" class="form-control" v-model="newStepsDescription" name="stepsDescription" placeholder="e.g. Walked from the Shire to Bree"/>
         </div>
         <button class="btn btn-primary" @click="logSteps()">Log Steps</button>
+
+        <hr />
+        <h5>Map a journey</h5>
+        <p class="text-muted mb-2">
+          Click the map to place a start pin, then an end pin. Drag pins to refine the route.
+        </p>
+        <div id="activity-map" class="mordor-map mb-2"></div>
+        <div class="d-flex align-items-center mb-3">
+          <span class="me-3">
+            Distance: <strong>{{ canLogMapJourney ? mapDistanceKm.toFixed(2) : "-" }} km</strong>
+          </span>
+          <button class="btn btn-primary me-2" :disabled="!canLogMapJourney || mapBusy" @click="logMapJourney()">
+            {{ mapBusy ? "Saving..." : "Log Map Journey" }}
+          </button>
+          <button class="btn btn-secondary" :disabled="!startPoint && !endPoint" @click="clearMapPins()">
+            Clear Pins
+          </button>
+        </div>
       </div>
       <div class="card-footer text-left">
         <p  v-if="activities.length === 0"> No journeys yet...</p>
@@ -80,6 +98,9 @@
             <span v-if="activity.steps && activity.steps > 0">
               ({{ activity.steps }} steps)
             </span>
+            <span v-if="activity.distanceKm && activity.distanceKm > 0">
+              - {{ activity.distanceKm.toFixed(2) }} km
+            </span>
             <button rel="tooltip" title="Delete Journey" class="btn btn-info btn-simple btn-link btn-sm ms-2"
                     @click="deleteActivity(activity, index)">
               <i class="fas fa-trash" aria-hidden="true"></i>
@@ -95,11 +116,22 @@
 app.component("user-profile", {
   template: "#user-profile",
   data: () => ({
-    user: null,
+    user: {
+      id: null,
+      name: "",
+      email: ""
+    },
     noUserFound: false,
     activities: [],
     newSteps: null,
     newStepsDescription: "",
+    map: null,
+    startMarker: null,
+    endMarker: null,
+    startPoint: null,
+    endPoint: null,
+    mapDistanceKm: 0,
+    mapBusy: false
   }),
   created: function () {
     const userId = this.$javalin.pathParams["user-id"];
@@ -116,6 +148,11 @@ app.component("user-profile", {
           console.log("No activities added yet (this is ok): " + error)
         })
   },
+  mounted: function () {
+    this.$nextTick(() => {
+      this.initMap();
+    });
+  },
   computed: {
     totalSteps() {
       return this.activities.reduce((sum, a) => sum + (a.steps || 0), 0);
@@ -125,9 +162,117 @@ app.component("user-profile", {
       if (!goal) return 0;
       const pct = Math.round((this.totalSteps / goal) * 100);
       return Math.min(100, pct);
+    },
+    canLogMapJourney() {
+      return this.startPoint && this.endPoint;
     }
   },
   methods: {
+    initMap: function () {
+      if (!window.L) {
+        console.log("Leaflet is not available; map will not be initialised.");
+        return;
+      }
+      if (this.map) {
+        return;
+      }
+      const container = document.getElementById("activity-map");
+      if (!container) {
+        return;
+      }
+      this.map = L.map(container, { scrollWheelZoom: false })
+          .setView([53.3498, -6.2603], 12);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(this.map);
+
+      this.map.on("click", this.handleMapClick);
+
+      setTimeout(() => {
+        if (this.map) {
+          this.map.invalidateSize();
+        }
+      }, 0);
+    },
+    handleMapClick: function (event) {
+      if (!this.map) {
+        return;
+      }
+      if (this.startMarker && this.endMarker) {
+        this.clearMapPins();
+      }
+
+      if (!this.startMarker) {
+        this.startMarker = L.marker(event.latlng, { draggable: true })
+            .addTo(this.map)
+            .bindPopup("Start")
+            .openPopup();
+        this.startPoint = event.latlng;
+        this.startMarker.on("dragend", () => {
+          this.startPoint = this.startMarker.getLatLng();
+          this.updateMapDistance();
+        });
+      } else if (!this.endMarker) {
+        this.endMarker = L.marker(event.latlng, { draggable: true })
+            .addTo(this.map)
+            .bindPopup("End")
+            .openPopup();
+        this.endPoint = event.latlng;
+        this.endMarker.on("dragend", () => {
+          this.endPoint = this.endMarker.getLatLng();
+          this.updateMapDistance();
+        });
+      }
+
+      this.updateMapDistance();
+    },
+    updateMapDistance: function () {
+      if (!this.map || !this.startPoint || !this.endPoint) {
+        this.mapDistanceKm = 0;
+        return;
+      }
+      const meters = this.map.distance(this.startPoint, this.endPoint);
+      this.mapDistanceKm = meters / 1000.0;
+    },
+    clearMapPins: function () {
+      if (this.map && this.startMarker) {
+        this.map.removeLayer(this.startMarker);
+      }
+      if (this.map && this.endMarker) {
+        this.map.removeLayer(this.endMarker);
+      }
+      this.startMarker = null;
+      this.endMarker = null;
+      this.startPoint = null;
+      this.endPoint = null;
+      this.mapDistanceKm = 0;
+    },
+    logMapJourney: function () {
+      if (!this.canLogMapJourney) {
+        return;
+      }
+      const userId = this.$javalin.pathParams["user-id"];
+      this.mapBusy = true;
+      axios.post(`/api/users/${userId}/activities/map`, {
+        startLat: this.startPoint.lat,
+        startLng: this.startPoint.lng,
+        endLat: this.endPoint.lat,
+        endLng: this.endPoint.lng
+      })
+          .then(response => {
+            this.activities.push(response.data);
+            this.clearMapPins();
+          })
+          .catch(error => {
+            console.log(error);
+            alert("Error logging map journey");
+          })
+          .finally(() => {
+            this.mapBusy = false;
+          });
+    },
     updateUser: function () {
       const userId = this.$javalin.pathParams["user-id"];
       const url = `/api/users/${userId}`

@@ -16,5 +16,6 @@ data class Activity(
     var calories: Int,
     var started: DateTime,
     var userId: Int,
-    var steps: Int = 0
+    var steps: Int = 0,
+    var distanceKm: Double = 0.0
 )

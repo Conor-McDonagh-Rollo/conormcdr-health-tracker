@@ -165,4 +165,10 @@ body {
 .app-layout .btn-info:hover {
   background: linear-gradient(90deg, #b2bec3, #636e72);
 }
+
+.mordor-map {
+  height: 320px;
+  border: 1px solid rgba(255, 140, 0, 0.4);
+  border-radius: 6px;
+}
 </style>

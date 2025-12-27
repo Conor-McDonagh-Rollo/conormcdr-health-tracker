@@ -83,20 +83,34 @@ jobs:
       - name: OpenShift Client Installer
         uses: redhat-actions/oc-installer@v1.2
 
+      - name: Validate OpenShift credentials
+        env:
+          OPENSHIFT_API_URL: ${{ secrets.OPENSHIFT_API_URL }}
+          OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+        run: |
+          if [ -z "${OPENSHIFT_API_URL}" ]; then
+            echo "OPENSHIFT_API_URL secret is missing (expected something like https://api.<cluster>:6443)"
+            exit 1
+          fi
+          if [ -z "${OPENSHIFT_TOKEN}" ]; then
+            echo "OPENSHIFT_TOKEN secret is missing (copy a token from 'Copy Login Command' in the OpenShift console)"
+            exit 1
+          fi
+
       - name: Log in to OpenShift
         env:
           OPENSHIFT_API_URL: ${{ secrets.OPENSHIFT_API_URL }}
           OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
         run: |
-          oc login --token=sha256~CXbXs26UVAO05rTrUpYIAAXEVTRIhw2jn9Nm3Y__Uhw --server=https://api.ocp-setu.waltoninstitute.ie:6443 --insecure-skip-tls-verify=true
+          oc login --server="${OPENSHIFT_API_URL}" --token="${OPENSHIFT_TOKEN}" --insecure-skip-tls-verify=true
       - name: Set project to msc-agile-sem1-25-cmcdonaghrollo
         run: |
           oc project msc-agile-sem1-25-cmcdonaghrollo
       - name: Build and deploy the app to OpenShift
         run: |
           # OpenShift setup uses Source-to-Image (S2I) 
-          oc start-build health-tracker-rest --from-dir=target/ --follow
+          oc start-build conormcdr-health-tracker --from-dir=target/ --follow
 
       - name: Check deployment status
         run: |
-          oc rollout status deployment/health-tracker-rest
+          oc rollout status deployment/conormcdr-health-tracker
