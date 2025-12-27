@@ -29,21 +29,21 @@
               <div class="input-group-prepend">
                 <span class="input-group-text" id="input-achievement-name">Name</span>
               </div>
-              <input type="text" class="form-control" v-model="formData.name" name="name" placeholder="e.g. First Mile"/>
+              <input type="text" class="form-control" v-model="formData.name" name="name" placeholder="e.g. First Kilometer"/>
             </div>
             <div class="input-group mb-2">
               <div class="input-group-prepend">
                 <span class="input-group-text" id="input-achievement-description">Description</span>
               </div>
               <input type="text" class="form-control" v-model="formData.description" name="description"
-                     placeholder="Walked a full mile"/>
+                     placeholder="Walked a full kilometer"/>
             </div>
             <div class="input-group mb-2">
               <div class="input-group-prepend">
                 <span class="input-group-text" id="input-achievement-distance">Distance (km)</span>
               </div>
               <input type="number" min="0" step="0.01" class="form-control" v-model.number="formData.targetDistanceKm"
-                     name="targetDistanceKm" placeholder="e.g. 1.6"/>
+                     name="targetDistanceKm" placeholder="e.g. 1.0"/>
             </div>
             <div class="input-group mb-2">
               <div class="input-group-prepend">

@@ -611,9 +611,9 @@ class HealthTrackerTest {
         fun `adding an achievement without admin role returns 403 response`() {
             val badgeFile = createTempBadge()
             val response = addAchievement(
-                name = "First Mile",
-                description = "Completed a mile",
-                targetDistanceKm = 1.6,
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
                 badgeFile = badgeFile,
                 role = "user"
             )
@@ -635,9 +635,9 @@ class HealthTrackerTest {
 
             val badgeFile = createTempBadge()
             addAchievement(
-                name = "First Mile",
-                description = "Completed a mile",
-                targetDistanceKm = 1.6,
+                name = "First Kilometer",
+                description = "Completed a kilometer",
+                targetDistanceKm = 1.0,
                 badgeFile = badgeFile,
                 role = "admin"
             )
@@ -653,7 +653,7 @@ class HealthTrackerTest {
             assertEquals(200, response.status)
             val achievements = jsonNodeToObject<Array<Achievement>>(response)
             assertEquals(1, achievements.size)
-            assertEquals("First Mile", achievements[0].name)
+            assertEquals("First Kilometer", achievements[0].name)
         }
     }
 
