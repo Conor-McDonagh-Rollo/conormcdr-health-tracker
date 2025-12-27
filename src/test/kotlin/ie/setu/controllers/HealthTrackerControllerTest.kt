@@ -1,6 +1,7 @@
 package ie.setu.controllers
 
 import ie.setu.domain.Activity
+import ie.setu.domain.Milestone
 import ie.setu.domain.User
 import ie.setu.domain.db.Activities
 import ie.setu.domain.db.Users
@@ -525,16 +526,98 @@ class HealthTrackerTest {
         }
     }
 
+    @Nested
+    inner class MilestoneAdminAccess {
+
+        @Test
+        fun `adding a milestone without admin role returns 403 response`() {
+            val response = addMilestone(
+                name = "Rivendell",
+                description = "Elven refuge",
+                targetSteps = 250000
+            )
+            assertEquals(403, response.status)
+        }
+
+        @Test
+        fun `adding a milestone with admin role returns 201 response`() {
+            val response = addMilestone(
+                name = "Moria",
+                description = "Dwarven halls",
+                targetSteps = 400000,
+                role = "admin"
+            )
+            assertEquals(201, response.status)
+            val addedMilestone = jsonNodeToObject<Milestone>(response)
+            assertEquals(204, deleteMilestone(addedMilestone.id, role = "admin").status)
+        }
+
+        @Test
+        fun `updating a milestone without admin role returns 403 response`() {
+            val createResponse = addMilestone(
+                name = "Lothlorien",
+                description = "Golden wood",
+                targetSteps = 500000,
+                role = "admin"
+            )
+            val addedMilestone = jsonNodeToObject<Milestone>(createResponse)
+
+            val updateResponse = updateMilestone(
+                id = addedMilestone.id,
+                name = "Lothlorien",
+                description = "Golden wood updated",
+                targetSteps = 510000
+            )
+            assertEquals(403, updateResponse.status)
+            assertEquals(204, deleteMilestone(addedMilestone.id, role = "admin").status)
+        }
+    }
+
+    @Nested
+    inner class UserActivityAdminAccess {
+
+        @Test
+        fun `adding a user without admin role returns 403 response`() {
+            val response = addUser("Samwise Gamgee", "samwise@gondor.com", role = "user")
+            assertEquals(403, response.status)
+        }
+
+        @Test
+        fun `deleting an activity without admin role returns 403 response`() {
+            val addedUser : User = jsonToObject(addUser(validName, validEmail).body.toString())
+            val addActivityResponse = addActivity(
+                activities[0].description,
+                activities[0].duration,
+                activities[0].calories,
+                activities[0].started,
+                addedUser.id
+            )
+            val addedActivity = jsonNodeToObject<Activity>(addActivityResponse)
+
+            val deleteResponse = deleteActivityByActivityId(addedActivity.id, role = "user")
+            assertEquals(403, deleteResponse.status)
+
+            deleteUser(addedUser.id)
+        }
+    }
+
     //helper function to add a test user to the database
-    private fun addUser (name: String, email: String): HttpResponse<JsonNode> {
-        return Unirest.post(origin + "/api/users")
+    private fun addUser (name: String, email: String, role: String? = "admin"): HttpResponse<JsonNode> {
+        val request = Unirest.post(origin + "/api/users")
             .body("{\"name\":\"$name\", \"email\":\"$email\"}")
-            .asJson()
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
     }
 
     //helper function to delete a test user from the database
-    private fun deleteUser (id: Int): HttpResponse<String> {
-        return Unirest.delete(origin + "/api/users/$id").asString()
+    private fun deleteUser (id: Int, role: String? = "admin"): HttpResponse<String> {
+        val request = Unirest.delete(origin + "/api/users/$id")
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asString()
     }
 
     //helper function to retrieve a test user from the database by email
@@ -548,10 +631,13 @@ class HealthTrackerTest {
     }
 
     //helper function to add a test user to the database
-    private fun updateUser (id: Int, name: String, email: String): HttpResponse<JsonNode> {
-        return Unirest.patch(origin + "/api/users/$id")
+    private fun updateUser (id: Int, name: String, email: String, role: String? = "admin"): HttpResponse<JsonNode> {
+        val request = Unirest.patch(origin + "/api/users/$id")
             .body("{\"name\":\"$name\", \"email\":\"$email\"}")
-            .asJson()
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
     }
 
     //helper function to retrieve all activities
@@ -570,19 +656,27 @@ class HealthTrackerTest {
     }
 
     //helper function to delete an activity by activity id
-    private fun deleteActivityByActivityId(id: Int): HttpResponse<String> {
-        return Unirest.delete(origin + "/api/activities/$id").asString()
+    private fun deleteActivityByActivityId(id: Int, role: String? = "admin"): HttpResponse<String> {
+        val request = Unirest.delete(origin + "/api/activities/$id")
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asString()
     }
 
     //helper function to delete an activity by activity id
-    private fun deleteActivitiesByUserId(id: Int): HttpResponse<String> {
-        return Unirest.delete(origin + "/api/users/$id/activities").asString()
+    private fun deleteActivitiesByUserId(id: Int, role: String? = "admin"): HttpResponse<String> {
+        val request = Unirest.delete(origin + "/api/users/$id/activities")
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asString()
     }
 
     //helper function to add a test user to the database
     private fun updateActivity(id: Int, description: String, duration: Double, calories: Int,
-                               started: DateTime, userId: Int): HttpResponse<JsonNode> {
-        return Unirest.patch(origin + "/api/activities/$id")
+                               started: DateTime, userId: Int, role: String? = "admin"): HttpResponse<JsonNode> {
+        val request = Unirest.patch(origin + "/api/activities/$id")
             .body("""
                 {
                   "description":"$description",
@@ -591,7 +685,11 @@ class HealthTrackerTest {
                   "started":"$started",
                   "userId":$userId
                 }
-            """.trimIndent()).asJson()
+            """.trimIndent())
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
     }
 
     private fun addMapActivity(
@@ -627,6 +725,55 @@ class HealthTrackerTest {
                 }
             """.trimIndent())
             .asJson()
+    }
+
+    private fun addMilestone(
+        name: String,
+        description: String,
+        targetSteps: Int,
+        role: String? = null
+    ): HttpResponse<JsonNode> {
+        val request = Unirest.post(origin + "/api/milestones")
+            .body("""
+                {
+                  "name":"$name",
+                  "description":"$description",
+                  "targetSteps":$targetSteps
+                }
+            """.trimIndent())
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
+    }
+
+    private fun updateMilestone(
+        id: Int,
+        name: String,
+        description: String,
+        targetSteps: Int,
+        role: String? = null
+    ): HttpResponse<JsonNode> {
+        val request = Unirest.patch(origin + "/api/milestones/$id")
+            .body("""
+                {
+                  "name":"$name",
+                  "description":"$description",
+                  "targetSteps":$targetSteps
+                }
+            """.trimIndent())
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asJson()
+    }
+
+    private fun deleteMilestone(id: Int, role: String? = null): HttpResponse<String> {
+        val request = Unirest.delete(origin + "/api/milestones/$id")
+        if (role != null) {
+            request.header("X-User-Role", role)
+        }
+        return request.asString()
     }
 
 

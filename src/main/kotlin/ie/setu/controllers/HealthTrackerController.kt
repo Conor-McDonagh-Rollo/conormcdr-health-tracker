@@ -29,6 +29,17 @@ object HealthTrackerController {
     private val userDao = UserDAO()
     private val activityDAO = ActivityDAO()
     private val milestoneDAO = MilestoneDAO()
+    private const val ADMIN_ROLE = "admin"
+
+    private fun requireAdmin(ctx: Context): Boolean {
+        val role = ctx.header("X-User-Role") ?: ""
+        if (role.equals(ADMIN_ROLE, ignoreCase = true)) {
+            return true
+        }
+        ctx.status(403)
+        ctx.json("Admin role required.")
+        return false
+    }
 
     /** Returns all users, or 404 if none exist. */
     fun getAllUsers(ctx: Context) {
@@ -71,6 +82,9 @@ object HealthTrackerController {
      * with its generated id and a 201 status code.
      */
     fun addUser(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
         val user : User = jsonToObject(ctx.body())
         val userId = userDao.save(user)
         if (userId != null) {
@@ -82,6 +96,9 @@ object HealthTrackerController {
 
     /** Deletes the user identified by `user-id`, returning 204 or 404. */
     fun deleteUser(ctx: Context){
+        if (!requireAdmin(ctx)) {
+            return
+        }
         if (userDao.delete(ctx.pathParam("user-id").toInt()) != 0)
             ctx.status(204)
         else
@@ -90,6 +107,9 @@ object HealthTrackerController {
 
     /** Updates the user record identified by `user-id` using the JSON body. */
     fun updateUser(ctx: Context){
+        if (!requireAdmin(ctx)) {
+            return
+        }
         val foundUser : User = jsonToObject(ctx.body())
         if ((userDao.update(id = ctx.pathParam("user-id").toInt(), user=foundUser)) != 0)
             ctx.status(204)
@@ -204,6 +224,9 @@ object HealthTrackerController {
 
     /** Deletes a single activity identified by `activity-id`. */
     fun deleteActivityByActivityId(ctx: Context){
+        if (!requireAdmin(ctx)) {
+            return
+        }
         if (activityDAO.deleteByActivityId(ctx.pathParam("activity-id").toInt()) != 0)
             ctx.status(204)
         else
@@ -212,6 +235,9 @@ object HealthTrackerController {
 
     /** Deletes all activities for the user identified by `user-id`. */
     fun deleteActivityByUserId(ctx: Context){
+        if (!requireAdmin(ctx)) {
+            return
+        }
         if (activityDAO.deleteByUserId(ctx.pathParam("user-id").toInt()) != 0)
             ctx.status(204)
         else
@@ -220,6 +246,9 @@ object HealthTrackerController {
 
     /** Updates an existing activity identified by `activity-id`. */
     fun updateActivity(ctx: Context){
+        if (!requireAdmin(ctx)) {
+            return
+        }
         val activity : Activity = jsonToObject(ctx.body())
         if (activityDAO.updateByActivityId(
                 activityId = ctx.pathParam("activity-id").toInt(),
@@ -259,6 +288,9 @@ object HealthTrackerController {
      * its generated id and a 201 status code.
      */
     fun addMilestone(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
         val milestone: Milestone = jsonToObject(ctx.body())
         val milestoneId = milestoneDAO.save(milestone)
         if (milestoneId != null) {
@@ -270,6 +302,9 @@ object HealthTrackerController {
 
     /** Deletes a milestone identified by `milestone-id`. */
     fun deleteMilestone(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
         if (milestoneDAO.delete(ctx.pathParam("milestone-id").toInt()) != 0)
             ctx.status(204)
         else
@@ -278,6 +313,9 @@ object HealthTrackerController {
 
     /** Updates the milestone identified by `milestone-id`. */
     fun updateMilestone(ctx: Context) {
+        if (!requireAdmin(ctx)) {
+            return
+        }
         val milestone: Milestone = jsonToObject(ctx.body())
         if ((milestoneDAO.update(id = ctx.pathParam("milestone-id").toInt(), milestone = milestone)) != 0)
             ctx.status(204)

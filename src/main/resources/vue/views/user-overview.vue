@@ -9,14 +9,21 @@
           <div class="col" align="right">
             <button rel="tooltip" title="Add"
                     class="btn btn-info btn-simple btn-link"
-                    @click="hideForm =!hideForm">
+                    :disabled="!isAdmin"
+                    @click="toggleForm">
               <i class="fa fa-plus" aria-hidden="true"></i>
             </button>
           </div>
         </div>
       </div>
-      <div class="card-body" :class="{ 'd-none': hideForm}">
-      <form id="addUser">
+      <div class="card-body">
+        <div class="mb-2" v-if="!isAdmin">
+          <small class="text-muted">
+            Admin role required to add, edit, or delete users. Set your role on the home page.
+          </small>
+        </div>
+        <div :class="{ 'd-none': hideForm || !isAdmin}">
+          <form id="addUser">
           <div class="input-group mb-3">
             <div class="input-group-prepend">
               <span class="input-group-text" id="input-user-name">Name</span>
@@ -29,8 +36,9 @@
             </div>
             <input type="email" class="form-control" v-model="formData.email" name="email" placeholder="Email"/>
           </div>
-        </form>
-        <button rel="tooltip" title="Update" class="btn btn-info btn-simple btn-link" @click="addUser()">Add User</button>
+          </form>
+          <button rel="tooltip" title="Update" class="btn btn-info btn-simple btn-link" @click="addUser()">Add User</button>
+        </div>
       </div>
     </div>
     <div class="list-group list-group-flush">
@@ -41,10 +49,12 @@
         </div>
         <div class="p2">
           <a :href="`/users/${user.id}`">
-            <button rel="tooltip" title="Update" class="btn btn-info btn-simple btn-link">
+            <button rel="tooltip" title="Update" class="btn btn-info btn-simple btn-link"
+                    :disabled="!isAdmin">
               <i class="fa fa-pencil" aria-hidden="true"></i>
             </button>
             <button rel="tooltip" title="Delete" class="btn btn-info btn-simple btn-link"
+                    :disabled="!isAdmin"
                     @click="deleteUser(user, index)">
               <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
@@ -63,22 +73,51 @@ app.component("user-overview", {
     users: [],
     formData: {},
     hideForm: true,
+    role: "user"
   }),
   created() {
+    this.loadRole();
     this.fetchUsers();
   },
+  computed: {
+    isAdmin() {
+      return (this.role || "").toLowerCase() === "admin";
+    }
+  },
   methods: {
+    loadRole() {
+      try {
+        const storedRole = window.localStorage ? window.localStorage.getItem("mordorRole") : null;
+        if (storedRole) {
+          this.role = storedRole;
+        }
+      } catch (error) {
+        console.log("Unable to load saved role", error);
+      }
+    },
+    toggleForm() {
+      if (!this.isAdmin) {
+        alert("Admin role required to add users.");
+        return;
+      }
+      this.hideForm = !this.hideForm;
+    },
     fetchUsers: function () {
       axios.get("/api/users")
           .then(res => this.users = res.data)
           .catch(() => alert("Error while fetching users"));
     },
     deleteUser: function (user, index) {
+      if (!this.isAdmin) {
+        alert("Admin role required to delete users.");
+        return;
+      }
       if (confirm('Are you sure you want to delete this user? This action cannot be undone.', 'Warning')) {
         //user confirmed delete
         const userId = user.id;
         const url = `/api/users/${userId}`;
-        axios.delete(url)
+        const headers = { "X-User-Role": this.role };
+        axios.delete(url, { headers })
             .then(() =>
                 //delete from the local state so Vue will reload list automatically
                 this.users.splice(index, 1))
@@ -88,12 +127,18 @@ app.component("user-overview", {
       }
     },
     addUser: function (){
+      if (!this.isAdmin) {
+        alert("Admin role required to add users.");
+        return;
+      }
       const url = `/api/users`;
+      const headers = { "X-User-Role": this.role };
       axios.post(url,
           {
             name: this.formData.name,
             email: this.formData.email
-          })
+          },
+          { headers })
           .then(response => {
             this.users.push(response.data)
             this.hideForm= true;

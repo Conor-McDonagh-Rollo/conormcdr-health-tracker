@@ -11,11 +11,13 @@
           <div class="col" align="right">
             <button rel="tooltip" title="Update"
                     class="btn btn-info btn-simple btn-link"
+                    :disabled="!isAdmin"
                     @click="updateUser()">
               <i class="far fa-save" aria-hidden="true"></i>
             </button>
             <button rel="tooltip" title="Delete"
                     class="btn btn-info btn-simple btn-link"
+                    :disabled="!isAdmin"
                     @click="deleteUser()">
               <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
@@ -102,6 +104,7 @@
               - {{ activity.distanceKm.toFixed(2) }} km
             </span>
             <button rel="tooltip" title="Delete Journey" class="btn btn-info btn-simple btn-link btn-sm ms-2"
+                    :disabled="!isAdmin"
                     @click="deleteActivity(activity, index)">
               <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
@@ -131,9 +134,11 @@ app.component("user-profile", {
     startPoint: null,
     endPoint: null,
     mapDistanceKm: 0,
-    mapBusy: false
+    mapBusy: false,
+    role: "user"
   }),
   created: function () {
+    this.loadRole();
     const userId = this.$javalin.pathParams["user-id"];
     const url = `/api/users/${userId}`
     axios.get(url)
@@ -165,9 +170,22 @@ app.component("user-profile", {
     },
     canLogMapJourney() {
       return this.startPoint && this.endPoint;
+    },
+    isAdmin() {
+      return (this.role || "").toLowerCase() === "admin";
     }
   },
   methods: {
+    loadRole() {
+      try {
+        const storedRole = window.localStorage ? window.localStorage.getItem("mordorRole") : null;
+        if (storedRole) {
+          this.role = storedRole;
+        }
+      } catch (error) {
+        console.log("Unable to load saved role", error);
+      }
+    },
     initMap: function () {
       if (!window.L) {
         console.log("Leaflet is not available; map will not be initialised.");
@@ -274,13 +292,19 @@ app.component("user-profile", {
           });
     },
     updateUser: function () {
+      if (!this.isAdmin) {
+        alert("Admin role required to update users.");
+        return;
+      }
       const userId = this.$javalin.pathParams["user-id"];
       const url = `/api/users/${userId}`
+      const headers = { "X-User-Role": this.role };
       axios.patch(url,
           {
             name: this.user.name,
             email: this.user.email
-          })
+          },
+          { headers })
           .then(() => {
             alert("User updated!")
           })
@@ -290,10 +314,15 @@ app.component("user-profile", {
           })
     },
     deleteUser: function () {
+      if (!this.isAdmin) {
+        alert("Admin role required to delete users.");
+        return;
+      }
       if (confirm("Do you really want to delete?")) {
         const userId = this.$javalin.pathParams["user-id"];
         const url = `/api/users/${userId}`
-        axios.delete(url)
+        const headers = { "X-User-Role": this.role };
+        axios.delete(url, { headers })
             .then(response => {
               alert("User deleted")
               //display the /users endpoint
@@ -305,11 +334,16 @@ app.component("user-profile", {
       }
     },
     deleteActivity: function (activity, index) {
+      if (!this.isAdmin) {
+        alert("Admin role required to delete activities.");
+        return;
+      }
       if (!confirm("Do you really want to delete this journey?")) {
         return;
       }
       const url = `/api/activities/${activity.id}`;
-      axios.delete(url)
+      const headers = { "X-User-Role": this.role };
+      axios.delete(url, { headers })
           .then(() => {
             this.activities.splice(index, 1);
           })
