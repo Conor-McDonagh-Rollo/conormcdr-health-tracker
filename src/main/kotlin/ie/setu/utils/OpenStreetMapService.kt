@@ -14,14 +14,24 @@ object OpenStreetMapService {
     private val logger = KotlinLogging.logger {}
     private val httpClient = HttpClient.newHttpClient()
     private val mapper = jsonObjectMapper()
-    private val userAgent = System.getenv("OPENSTREETMAP_USER_AGENT")
-        ?: "health-tracker-rest/1.0 (contact: example@example.com)"
+
+    private fun baseUrl(): String {
+        val configured = System.getProperty("OPENSTREETMAP_BASE_URL")
+            ?: System.getenv("OPENSTREETMAP_BASE_URL")
+            ?: "https://nominatim.openstreetmap.org"
+        return configured.trimEnd('/')
+    }
+
+    private fun userAgent(): String =
+        System.getProperty("OPENSTREETMAP_USER_AGENT")
+            ?: System.getenv("OPENSTREETMAP_USER_AGENT")
+            ?: "health-tracker-rest/1.0 (contact: example@example.com)"
 
     fun reverseGeocode(lat: Double, lon: Double): String? {
-        val url = "https://nominatim.openstreetmap.org/reverse" +
+        val url = "${baseUrl()}/reverse" +
             "?format=jsonv2&lat=$lat&lon=$lon&zoom=18&addressdetails=0"
         val request = HttpRequest.newBuilder(URI(url))
-            .header("User-Agent", userAgent)
+            .header("User-Agent", userAgent())
             .header("Accept", "application/json")
             .GET()
             .build()

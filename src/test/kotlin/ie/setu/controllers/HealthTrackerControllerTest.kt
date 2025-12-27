@@ -26,6 +26,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import kong.unirest.core.Unirest
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
 import org.joda.time.DateTime
 import org.junit.jupiter.api.Assertions.assertNotEquals
 
@@ -34,6 +36,7 @@ class HealthTrackerTest {
 
     private val app = ServerContainer.instance
     private val origin = "http://localhost:" + app.port()
+    private lateinit var osmServer: HttpServer
 
     companion object {
         @BeforeAll
@@ -41,6 +44,31 @@ class HealthTrackerTest {
         fun setupInMemoryDatabase() {
             TestDatabaseConfig.connect()
         }
+    }
+
+    @BeforeAll
+    fun startOsmStub() {
+        osmServer = HttpServer.create(InetSocketAddress(0), 0)
+        osmServer.createContext("/reverse") { exchange ->
+            val query = exchange.requestURI.query ?: ""
+            val responseBody = if (query.contains("lat=0.0")) {
+                """{"error":"bad request"}"""
+            } else {
+                """{"display_name":"Bag End, Hobbiton"}"""
+            }
+            val bytes = responseBody.toByteArray(Charsets.UTF_8)
+            exchange.responseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(if (query.contains("lat=0.0")) 500 else 200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        osmServer.start()
+        System.setProperty("OPENSTREETMAP_BASE_URL", "http://localhost:${osmServer.address.port}")
+    }
+
+    @AfterAll
+    fun stopOsmStub() {
+        osmServer.stop(0)
+        System.clearProperty("OPENSTREETMAP_BASE_URL")
     }
 
     @BeforeEach
@@ -248,6 +276,44 @@ class HealthTrackerTest {
                 activities.get(0).description, activities.get(0).duration,
                 activities.get(0).calories, activities.get(0).started, userId
             )
+            assertEquals(404, addActivityResponse.status)
+        }
+    }
+
+    @Nested
+    inner class CreateMapActivities {
+
+        @Test
+        fun `add a map activity when a user exists returns a 201 response`() {
+            val addedUser: User = jsonToObject(addUser(validName, validEmail).body.toString())
+
+            val addActivityResponse = addMapActivity(
+                userId = addedUser.id,
+                startLat = 53.3498,
+                startLng = -6.2603,
+                endLat = 53.3438,
+                endLng = -6.2546
+            )
+
+            assertEquals(201, addActivityResponse.status)
+            val addedActivity = jsonNodeToObject<Activity>(addActivityResponse)
+            assertEquals(addedUser.id, addedActivity.userId)
+            assertNotEquals(0.0, addedActivity.distanceKm)
+            assertEquals(true, addedActivity.description.startsWith("From "))
+
+            deleteUser(addedUser.id)
+        }
+
+        @Test
+        fun `add a map activity when user does not exist returns a 404 response`() {
+            val addActivityResponse = addMapActivity(
+                userId = -1,
+                startLat = 53.3498,
+                startLng = -6.2603,
+                endLat = 53.3438,
+                endLng = -6.2546
+            )
+
             assertEquals(404, addActivityResponse.status)
         }
     }
@@ -526,6 +592,25 @@ class HealthTrackerTest {
                   "userId":$userId
                 }
             """.trimIndent()).asJson()
+    }
+
+    private fun addMapActivity(
+        userId: Int,
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double
+    ): HttpResponse<JsonNode> {
+        return Unirest.post(origin + "/api/users/$userId/activities/map")
+            .body("""
+                {
+                  "startLat":$startLat,
+                  "startLng":$startLng,
+                  "endLat":$endLat,
+                  "endLng":$endLng
+                }
+            """.trimIndent())
+            .asJson()
     }
 
     //helper function to add an activity
