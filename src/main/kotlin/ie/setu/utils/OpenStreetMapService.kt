@@ -43,7 +43,8 @@ object OpenStreetMapService {
         val env = envOverrides?.get(name) ?: System.getenv(name)
         return property ?: env
     }
-
+    
+    // This function is partially AI generated, specifically the try catch for when I was debugging why the API was failing
     fun reverseGeocode(lat: Double, lon: Double): String? {
         val key = "%.5f,%.5f".format(lat, lon)
         val cached = cache[key]
