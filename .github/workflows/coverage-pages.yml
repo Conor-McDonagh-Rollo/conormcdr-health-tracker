@@ -22,9 +22,17 @@ jobs:
           cache: maven
       - name: Run tests and generate JaCoCo report
         run: mvn -Djkube.skip=true test jacoco:report
+      - name: Generate KDoc documentation
+        run: mvn -Djkube.skip=true -DskipTests dokka:dokka
+      - name: Collect KDoc output for Pages
+        run: |
+          mkdir -p target/site
+          rm -rf target/site/dokka
+          cp -R target/dokka target/site/dokka
       - name: Generate badge endpoint
         run: |
           python3 - <<'PY'
+          import os
           import csv
           import json
           csv_path = "target/site/jacoco/jacoco.csv"
@@ -41,12 +49,15 @@ jobs:
           else:
               color = "green"
           data = {"schemaVersion": 1, "label": "coverage", "message": f"{pct}%", "color": color}
+          os.makedirs("target/site", exist_ok=True)
           with open("target/site/jacoco/jacoco.json", "w") as out:
+              json.dump(data, out)
+          with open("target/site/jacoco.json", "w") as out:
               json.dump(data, out)
           PY
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: target/site/jacoco
+          path: target/site
 
   deploy-pages:
     needs: coverage
